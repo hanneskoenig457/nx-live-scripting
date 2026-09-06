@@ -48,4 +48,4 @@ hier nur die verbindlichen Leitplanken für dieses Verzeichnis.
 
 - `README.md` ist das Dashboard; `docs/project-state.md` der aktuelle validierte Stand. Stabile Docs (`docs/nx-setup-verified.md`, `docs/nx-live-scripting-handoff.md`) nicht stilistisch umschreiben, nur bei Wahrheits-/Navigationsänderung anfassen.
 - Substanzielle Arbeit (sessions-übergreifend, Modell-/Workflow-Änderung, Validation-Gate, mehrere Akzeptanzkriterien) bekommt ein GitHub-Issue mit Kontext/Ziel, Scope/Non-Goals, Inputs, Akzeptanzkriterien, Dependencies, Doku-/Evidence-Pflicht. Kleines Housekeeping direkt per Commit.
-- Skill-Kopie: `skills/nx-live-scripting/` hier ist die gepflegte Quelle; Deploy nach `~/.claude/skills/nx-live-scripting` nur per explizitem Sync, keine zweite divergierende Wahrheit.
+- Skill-Quelle ist `skills/nx-live-scripting/` hier. `~/.claude/skills/nx-live-scripting` ist ein Symlink darauf — keine zweite Kopie, kein Deploy-Schritt, aber: **der ausgecheckte Branch ist der aktive Skill.** Skill-Änderungen auf einem Feature-Branch wirken sofort und verschwinden beim Wechsel zurück auf `main` vor dem Merge.

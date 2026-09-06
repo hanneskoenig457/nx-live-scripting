@@ -17,7 +17,11 @@ einsammelbar. Ordner nach Datenfluss: `01_host/` → `02_bridge/` → `03_jobs/`
   Run `20260905T211411Z-4db4f56d`, drei Features mit Undo-Marks, NX-PID 13032, Desktop-Session 1.
 - Batch-Pfad verifiziert: Run `20260905T201118Z-44b7601a`, Kontur + Toleranzzeichen, 14081-Byte-PDF.
 - Code identisch aus `10_Online_Machining` übernommen, nur Ordnernamen (`01_host/` …) und Pfadverweise umbenannt. VM-Seite unberührt.
-- Skill-Kopie `../skills/nx-live-scripting/SKILL.md` synchron mit `~/.claude/skills/nx-live-scripting` (geprüft 2026-09-06, `diff -rq` leer).
+- `~/.claude/skills/nx-live-scripting` ist ein **Symlink** auf
+  `skills/nx-live-scripting` in diesem Repo — es gibt keine zweite Kopie und
+  keinen Deploy-Schritt. Folge: **der ausgecheckte Branch ist der aktive
+  Skill.** Auf einem Feature-Branch gearbeitete Skill-Änderungen sind sofort
+  live; ein Wechsel zurück auf `main` vor dem Merge nimmt sie wieder weg.
 
 ### Aus dem Prüfkörper-Lauf am 2026-09-06 (Quelle: `10_Online_Machining/cad/README.md`)
 
