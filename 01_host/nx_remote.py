@@ -53,7 +53,15 @@ def main():
     ok=False
     report=local/'remote/result.json'
     if report.exists():
-        data=json.loads(report.read_text(encoding='utf-8-sig'))
+        # NX' embedded Python writes text in the Windows ANSI code page unless the
+        # job asks for UTF-8, so a job that reports German text lands as cp1252.
+        raw=report.read_bytes()
+        for encoding in ('utf-8-sig','cp1252'):
+            try:
+                data=json.loads(raw.decode(encoding))
+                break
+            except UnicodeDecodeError:
+                continue
         print(json.dumps(data,indent=2))
         ok=data.get('ok') is True
     (local/'outcome.json').write_text(json.dumps({'ok':ok and result.returncode==0 and fetch.returncode==0,'ssh_exit':result.returncode,'fetch_exit':fetch.returncode},indent=2))

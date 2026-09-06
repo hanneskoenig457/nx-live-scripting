@@ -20,6 +20,9 @@ Betriebs- und Sicherheitsregeln für Agenten:
 [`AGENTS.md`](AGENTS.md).
 Das destillierte Betriebswissen als Skill für Claude und GPT:
 [`skills/nx-live-scripting/`](skills/nx-live-scripting/SKILL.md).
+Die Sequenzen, die tatsächlich gelaufen sind — und die Wege, die belegt nicht
+funktionieren:
+[`skills/…/references/verified-recipes.md`](skills/nx-live-scripting/references/verified-recipes.md).
 
 ## Was hier liegt
 
@@ -41,6 +44,10 @@ Nachschlagewerk beim Schreiben von Jobs.
   visible_probe.py            Smoke-Test in der sichtbaren Sitzung
   live_demo.py                Schrittweiser Aufbau mit Undo-Marks, zum Zuschauen
   acceptance.py               Fähigkeitstest: Körper → Zeichnung → Toleranz → PDF
+  feature_reedit_probe.py     Öffnet jedes Feature erneut — findet Builder-Defaults,
+                              die erst beim Doppelklick auffallen
+  part_open_probe.py          Liest NX' Ladestatus im Klartext, wenn ein Teil
+                              nicht mehr öffnet
 04_reference/                 Nachschlagen beim Schreiben von Jobs
   nx_api_lookup.py            Substring-Suche in NXOpen.xml
   NXOpen.xml                  API-Doku aus der eigenen Installation (gitignored)

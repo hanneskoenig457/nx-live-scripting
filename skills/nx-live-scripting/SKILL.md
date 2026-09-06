@@ -87,11 +87,22 @@ both fail at runtime otherwise.
 
 The XML documents **.NET** signatures while jobs are **Python**. That gap is the
 main source of plausible, non-running code. The systematic differences —
-properties instead of `Get`/`Set`, `out` parameters returned as tuples, enum
-paths, mandatory `Destroy()` on builders, expression strings instead of numbers —
-are listed in [references/nxopen-python-notes.md](references/nxopen-python-notes.md).
-When in doubt, a signature copied from a job that has actually run in this NX
-version beats a translated .NET signature.
+properties instead of `Get`/`Set`, getters and setters under different names,
+flattened enum paths, `out` parameters returned as tuples, mandatory `Destroy()`
+on builders, expression strings instead of numbers — are listed in
+[references/nxopen-python-notes.md](references/nxopen-python-notes.md). When in
+doubt, a signature copied from a job that has actually run in this NX version
+beats a translated .NET signature.
+
+For whole tasks rather than single calls, read
+[references/verified-recipes.md](references/verified-recipes.md) **first**. It
+carries the working sequences for sketch-based modelling, threaded holes,
+drawings from a company sheet template, dimensions with ISO fits, surface finish
+symbols and PDF export — and, just as usefully, the routes that do not work, so
+they are not tried again. Its opening section is the trap that has cost the most
+time so far: several builders default `Tolerance` to `0.0`, commit happily, and
+fail only later — on re-opening the feature, or with an error message that names
+something else entirely.
 
 ## Evidence, not assumption
 
@@ -100,6 +111,14 @@ version beats a translated .NET signature.
   cleanly. Before accepting a drawing, inspect the PDF for contours, dimension
   association, tolerance signs and layout, or make the job assert what it
   produced (`IsOutOfDate is False`, non-empty `AskVisibleObjects()`).
+- **Let the job check its own numbers.** A dimension can attach to the wrong
+  geometry and still return a value that looks reasonable — a diameter
+  associated to circular edges instead of the cylindrical face reports the axial
+  distance. Compare `dim.ComputedSize` against the nominal in the job and report
+  both, so a wrong association is a failed run rather than a wrong drawing.
+- **Read NX's syslog when an exception is too terse to act on.** The newest
+  `*.syslog` in `%TEMP%` carries the real message; that is how a bare
+  `Tolerance error` was traced to its cause.
 - Report the layer that failed — SSH, VM, dispatcher, queue, hash check, NX API,
   job logic — instead of a generic failure.
 - Do not claim a run succeeded from the absence of an error. Read `result.json`.

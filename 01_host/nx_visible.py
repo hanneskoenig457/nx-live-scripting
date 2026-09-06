@@ -41,7 +41,15 @@ Get-Process ugraf -ErrorAction SilentlyContinue | Select-Object Id,SessionId,Res
     if not report.exists():
         print('Journal has not written a result yet; no successful execution claimed.')
         return 1
-    data = json.loads(report.read_text(encoding='utf-8-sig'))
+    # NX' embedded Python writes text in the Windows ANSI code page unless the job
+    # asks for UTF-8, so a job that reports German text lands as cp1252.
+    raw = report.read_bytes()
+    for encoding in ('utf-8-sig', 'cp1252'):
+        try:
+            data = json.loads(raw.decode(encoding))
+            break
+        except UnicodeDecodeError:
+            continue
     execution_file = destination / 'bridge-execution.json'
     execution = json.loads(execution_file.read_text()) if execution_file.exists() else None
     if execution is not None and execution.get('execution_ok') is not True:

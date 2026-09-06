@@ -36,7 +36,10 @@ and the translation is where it breaks.
 
 The reliable move: **a call copied from a job in `03_jobs/` that has actually run
 in this NX version beats any translated .NET signature.** `acceptance.py` and
-`live_demo.py` are verified Python against NX 2506.
+`live_demo.py` are verified Python against NX 2506, and
+[verified-recipes.md](verified-recipes.md) collects whole working sequences for
+modelling, drawing derivation and export — read it before writing a job in
+territory it already covers.
 
 ### Differences to expect when translating
 
@@ -61,6 +64,57 @@ Confirmed by the working jobs in this toolkit:
 - **Disposable status objects.** `part.Save(...)` returns a status that wants
   `.Dispose()`.
 
+Confirmed later, each one after producing code that looked correct and did not
+work:
+
+- **The readable property and the writable one often differ in name.** The XML
+  shows one member; Python exposes the getter under that name and refuses to
+  assign to it. Seen so far: `ThreadBuilder.Type` reads, `ThreadType` writes;
+  `DraftingSurfaceFinishBuilder.FinishType` reads, `Finish` writes;
+  `SectionViewBuilder.SectionLineType` reads, `SectionViewType` writes. When an
+  assignment answers *"attribute … is not writable"*, look for a sibling with the
+  feature's own name in front of it rather than concluding the property is
+  unavailable.
+- **Nested enums are flattened, and an unset property returns the enum class.**
+  `NXOpen.Features.ThreadBuilder.Type` is not reachable; the values live in
+  `NXOpen.Features.ThreadBuilderType`. The pattern is
+  `<Namespace>.<Builder><EnumName>`, with a trailing `s` sometimes present
+  (`DatumAxisBuilderTypes`, `HolePackageBuilderTypes`) and sometimes not
+  (`ThreadBuilderInput`). Resolve it instead of guessing:
+
+```python
+def enum_value(builder, prop, value):
+    for name in (type(builder).__name__ + prop, type(builder).__name__ + prop + 's'):
+        holder = getattr(NXOpen.Features, name, None)
+        if holder is not None and hasattr(holder, value):
+            return getattr(holder, value)
+    current = getattr(builder, prop, None)        # an unset property returns the class
+    if isinstance(current, type) and hasattr(current, value):
+        return getattr(current, value)
+    raise AttributeError('%s.%s has no value %s' % (type(builder).__name__, prop, value))
+```
+
+- **Reserved words get a suffix.** `NXOpen.Sketch.ViewReorient.False` is not
+  valid Python; the member is `FalseValue`, matching the already-used
+  `BasePart.CloseAfterSave.FalseValue`.
+- **Selections are not lists.** `ThreadBuilder.CylindricalFace` is a
+  `SelectObject`: `.Value = face`, not `.Add(face)`.
+  `HolePackageBuilder.HolePosition` is a `Section` and takes
+  `AddSmartPoint(point, tolerance)`. Title block cells and section-line segments
+  are `ObjectList`s — `.Length` and `.FindItem(i)`, not iteration.
+- **Some members are simply gone.** `Face.GetDiameter`, `Face.GetBoundingBox`,
+  `FeatureCollection.CreateSymbolicThreadBuilder`,
+  `FeatureCollection.DeleteFeature`. Deleting runs through
+  `UpdateManager.AddToDeleteList` plus `DoUpdate(mark)`. A removed member is a
+  plausible reason for a stale "NX cannot do this" conclusion — check the name
+  before believing the capability is absent.
+- **A method taking one object may still want a list.**
+  `TitleBlocks.CreateEditTitleBlockBuilder` refuses a single `TitleBlock` and
+  accepts `[title_block]`.
+- **`out` parameters come back as tuples, and not every element is a sequence.**
+  `UFSession.Modeling.AskFaceData` returns seven values; the fifth is a float
+  radius and the sixth a single float, not a list.
+
 Expected from the .NET/Python binding in general, worth verifying against a real
 run before relying on them:
 
@@ -72,6 +126,17 @@ run before relying on them:
 When a translation is uncertain, write a tiny probe job that only calls the
 questionable API and reports `dir(obj)` or the exception into `result.json`. One
 7-second dispatch cycle settles it; guessing does not.
+
+Two habits make those probes pay for themselves:
+
+- **Dump the whole surface at once.** A helper returning `dir(obj)` plus, for
+  every attribute that is itself a type, that type's members answers "what is
+  this builder called and what values does its enum take" in one dispatch
+  instead of five.
+- **Sweep instead of guessing.** When one of a handful of options must be right —
+  a point option, a call order, a spelling — build them all in one job and report
+  the value each produced. `thread_probe.py` in the consuming project settles 24
+  combinations in a single run. Delete the objects a sweep creates.
 
 ## Worth building later
 
