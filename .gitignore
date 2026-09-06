@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Generierte Run-Evidence (archivierte Source + Manifest + Results), nie committen.
+runs/
+
+# Lokale Vendor-API-Dokumentation aus der eigenen NX-Installation.
+# Lizenziert, nicht weitergeben.
+04_reference/NXOpen.xml

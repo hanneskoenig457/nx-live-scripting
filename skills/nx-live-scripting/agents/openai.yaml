@@ -1,0 +1,4 @@
+interface:
+  display_name: "NX Live Scripting"
+  short_description: "Siemens NX live steuern: Bridge, Jobs, NXOpen-API"
+  default_prompt: "Use $nx-live-scripting to drive Siemens NX through the visible-session bridge."
