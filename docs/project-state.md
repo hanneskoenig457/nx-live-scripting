@@ -33,5 +33,13 @@ einsammelbar. Ordner nach Datenfluss: `01_host/` → `02_bridge/` → `03_jobs/`
 3. .NET→Python-Mapping-Regeln + verifizierte Beispiele indexieren, erst dann Embedding-Index (Handoff 9.3).
 4. Dispatcher auf `managed_core`/net8 nur bei NX-Upgrade oder wenn ohnehin angefasst (Handoff 9.4, heute nicht anfassen).
 
+## Repo / laufende Arbeit
+
+- Remote (privat): https://github.com/hanneskoenig457/nx-live-scripting
+- Issue #1: Generalisierung `NX_BRIDGE_ROOT` (Handoff 9.1).
+- Issue #2: Rückkanal fürs Auge (Handoff 9.2).
+- Issue #3: API-Retrieval + .NET→Python-Mapping (Handoff 9.3).
+- Kein Project-Board (erst bei mehreren aktiven/blockierten/übergebenen Issues).
+
 Herleitung und Alternativenbewertung: [nx-live-scripting-handoff.md](nx-live-scripting-handoff.md).
 Betriebsregeln: [../AGENTS.md](../AGENTS.md).
