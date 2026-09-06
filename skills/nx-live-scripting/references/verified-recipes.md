@@ -8,6 +8,11 @@ the claim can be re-checked rather than believed. Source of all of it: the
 Use this file the way you would use a colleague's notebook: copy the shape, then
 verify with `nx_api_lookup.py` that the members still exist in your NX build.
 
+Every probe named below is archived under
+[`03_jobs/probes/`](../../../03_jobs/probes/README.md) — they are the evidence,
+not a library. The two diagnostics meant for reuse sit one level up:
+`feature_reedit_probe.py` and `part_open_probe.py`.
+
 ---
 
 ## 0. The trap that costs the most time: builders whose tolerance defaults to zero

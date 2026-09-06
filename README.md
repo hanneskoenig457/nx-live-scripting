@@ -48,6 +48,7 @@ Nachschlagewerk beim Schreiben von Jobs.
                               die erst beim Doppelklick auffallen
   part_open_probe.py          Liest NX' Ladestatus im Klartext, wenn ein Teil
                               nicht mehr öffnet
+  probes/                     Archivierte Belege hinter verified-recipes.md
 04_reference/                 Nachschlagen beim Schreiben von Jobs
   nx_api_lookup.py            Substring-Suche in NXOpen.xml
   NXOpen.xml                  API-Doku aus der eigenen Installation (gitignored)

@@ -135,8 +135,8 @@ Two habits make those probes pay for themselves:
   instead of five.
 - **Sweep instead of guessing.** When one of a handful of options must be right —
   a point option, a call order, a spelling — build them all in one job and report
-  the value each produced. `thread_probe.py` in the consuming project settles 24
-  combinations in a single run. Delete the objects a sweep creates.
+  the value each produced. `03_jobs/probes/thread_probe.py` settles 24 combinations in a
+  single run. Delete the objects a sweep creates.
 
 ## Worth building later
 
