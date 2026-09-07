@@ -1,4 +1,6 @@
-# NXOpen from Python: lookup and the .NET gap
+# Layer 4 — NXOpen from Python: lookup and the .NET gap
+
+The language layer under the two call files ([api-modelling.md](api-modelling.md), [api-drafting.md](api-drafting.md)): how to search the reference, and how a .NET signature has to be bent to run in Python.
 
 ## The lookup tool
 
@@ -37,7 +39,8 @@ and the translation is where it breaks.
 The reliable move: **a call copied from a job in `03_jobs/` that has actually run
 in this NX version beats any translated .NET signature.** `acceptance.py` and
 `live_demo.py` are verified Python against NX 2506, and
-[verified-recipes.md](verified-recipes.md) collects whole working sequences for
+[api-modelling.md](api-modelling.md) and [api-drafting.md](api-drafting.md)
+collect whole working sequences for
 modelling, drawing derivation and export — read it before writing a job in
 territory it already covers.
 

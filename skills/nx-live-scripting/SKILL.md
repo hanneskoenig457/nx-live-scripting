@@ -94,15 +94,51 @@ on builders, expression strings instead of numbers — are listed in
 doubt, a signature copied from a job that has actually run in this NX version
 beats a translated .NET signature.
 
-For whole tasks rather than single calls, read
-[references/verified-recipes.md](references/verified-recipes.md) **first**. It
-carries the working sequences for sketch-based modelling, threaded holes,
-drawings from a company sheet template, dimensions with ISO fits, surface finish
-symbols and PDF export — and, just as usefully, the routes that do not work, so
-they are not tried again. Its opening section is the trap that has cost the most
-time so far: several builders default `Tolerance` to `0.0`, commit happily, and
-fail only later — on re-opening the feature, or with an error message that names
-something else entirely.
+For whole tasks rather than single calls, go to the layer-4 file for what you
+are building — [references/api-modelling.md](references/api-modelling.md) for
+geometry, [references/api-drafting.md](references/api-drafting.md) for sheets,
+views, dimensions and annotations. Each opens with an index table (what you
+want → entry point → trap) and closes with the routes that are known **not** to
+work, so they are not tried again.
+
+The single most expensive trap, before anything else: several builders default
+`Tolerance` to `0.0`, commit happily, and fail only later — on re-opening the
+feature, or with an error message that names something else entirely.
+
+## Knowledge layers: one transport layer, three knowledge layers
+
+Layer 1 is how jobs reach NX and applies to every job. Layers 2–4 are the
+engineering knowledge behind drawing work, from the norm down to the call.
+Read top-down, extend bottom-up.
+
+| Layer | Files | Holds |
+| --- | --- | --- |
+| **1 Transport** | this file, [operations.md](references/operations.md), [job-contract.md](references/job-contract.md), [bridge-architecture.md](references/bridge-architecture.md) | How a job reaches NX, what it must satisfy, how to diagnose the bridge |
+| **2 Norm knowledge** | [norm-knowledge.md](references/norm-knowledge.md) | What a standard element *is* and which numbers its norm fixes. Placeholder + entry schema; fill one element per session from the norm original |
+| **3 Rules** | [dimensioning-rules.md](references/dimensioning-rules.md) | How to dimension norm-correctly, independent of NX: placement, order, symbols, fits, surface, edges, checklists. Part-specific values stay with the project |
+| **4 API** | [api-modelling.md](references/api-modelling.md) (geometry), [api-drafting.md](references/api-drafting.md) (drawing), [nxopen-python-notes.md](references/nxopen-python-notes.md) (the .NET↔Python gap) | Calls that have **actually run**, each with its run id or probe, plus the dead ends. Unlisted paths are unverified, not impossible |
+
+**Read rules before API.** Layer 3 first, layer 4 second — API-first reading
+optimises mechanism over conformity.
+
+### Where a new finding goes
+
+Write findings into [FINDINGS-INBOX.md](FINDINGS-INBOX.md) while you work, and
+**empty that file before the task is finished**: each entry moves into the
+matching layer (new element → 2, new rule → 3, new working sequence → 4 with a
+run id and `result.json`) or is deleted as noise. Findings true only for this
+part belong to the project, not to this skill.
+
+Two filing rules keep the layers usable:
+
+- **Edit the existing section; never append a new one.** Appending is what
+  turned the former `verified-recipes.md` into a chronological pile no layer
+  could absorb.
+- **A contradiction corrects the old text**, with a dated footnote carrying the
+  evidence. Two versions standing side by side misinform whoever reads only the
+  first.
+
+A mapping without a run behind it does not go in.
 
 ## Evidence, not assumption
 

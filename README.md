@@ -22,7 +22,8 @@ Das destillierte Betriebswissen als Skill für Claude und GPT:
 [`skills/nx-live-scripting/`](skills/nx-live-scripting/SKILL.md).
 Die Sequenzen, die tatsächlich gelaufen sind — und die Wege, die belegt nicht
 funktionieren:
-[`skills/…/references/verified-recipes.md`](skills/nx-live-scripting/references/verified-recipes.md).
+[`skills/…/references/api-modelling.md`](skills/nx-live-scripting/references/api-modelling.md)
+und [`api-drafting.md`](skills/nx-live-scripting/references/api-drafting.md).
 
 ## Was hier liegt
 
@@ -48,7 +49,7 @@ Nachschlagewerk beim Schreiben von Jobs.
                               die erst beim Doppelklick auffallen
   part_open_probe.py          Liest NX' Ladestatus im Klartext, wenn ein Teil
                               nicht mehr öffnet
-  probes/                     Archivierte Belege hinter verified-recipes.md
+  probes/                     Archivierte Belege hinter den Layer-4-Dateien
 04_reference/                 Nachschlagen beim Schreiben von Jobs
   nx_api_lookup.py            Substring-Suche in NXOpen.xml
   NXOpen.xml                  API-Doku aus der eigenen Installation (gitignored)

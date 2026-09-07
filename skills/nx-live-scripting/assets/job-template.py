@@ -16,16 +16,27 @@ import NXOpen.Features
 
 def main(job_dir):
     out = Path(job_dir)
-    result = {'ok': False, 'stage': 'start', 'pid': os.getpid(), 'steps': []}
+    result = {'ok': False, 'stage': 'start', 'pid': os.getpid(), 'steps': [],
+              'rules': [], 'deviations': []}
 
     def checkpoint(stage):
         # Written as the job progresses: if NX blocks or the job is interrupted,
         # the last stage recorded is how far it got.
         result['stage'] = stage
-        (out / 'result.json').write_text(json.dumps(result, indent=2))
+        # UTF-8 explicitly: NX's embedded Python defaults to cp1252 and the
+        # host's json.loads then fails on the first umlaut.
+        (out / 'result.json').write_text(json.dumps(result, indent=2),
+                                         encoding='utf-8')
 
     try:
+        # Pre-flight first: declare every skill/project rule this job must
+        # satisfy (rule ID + how it will be met). Reading the skill is not
+        # compliance — an explicit per-task rule list is. Overall ok below
+        # requires every rule resolved, not just green numbers.
         build(out, result, checkpoint)
+        open_rules = [r['rule'] for r in result['rules']
+                      if r.get('status') not in ('met', 'deviated')]
+        assert not open_rules, {'unresolved rules': open_rules}
         result['ok'] = True
     except Exception:
         # An exception escaping into NX opens a modal dialog that blocks the NX
@@ -33,6 +44,28 @@ def main(job_dir):
         # the VM. Every job reports its own failure instead.
         result['error'] = traceback.format_exc()
     checkpoint(result['stage'])
+
+
+def require_rule(result, rule_id, how):
+    """Declare a rule BEFORE building (e.g. 'F-2 two views', 'R-2.1 nest').
+    Dimensions/annotations record their rule alongside nominal/computed."""
+    result['rules'].append({'rule': rule_id, 'how': how, 'status': 'open'})
+
+
+def resolve_rule(result, rule_id, evidence):
+    for r in result['rules']:
+        if r['rule'] == rule_id:
+            r.update({'status': 'met', 'evidence': evidence})
+
+
+def deviate(result, rule_id, tried, fallback, why):
+    """A fallback is not silent: record what was tried, what was kept, and
+    why — with run id as evidence. An undocumented fallback is a defect."""
+    result['deviations'].append({'rule': rule_id, 'tried': tried,
+                                 'fallback': fallback, 'why': why})
+    for r in result['rules']:
+        if r['rule'] == rule_id:
+            r.update({'status': 'deviated'})
 
 
 def build(out, result, checkpoint, watchable=True):

@@ -1,7 +1,7 @@
-# Probe-Jobs: die Belege hinter `verified-recipes.md`
+# Probe-Jobs: die Belege hinter den Layer-4-Dateien
 
 Diese Jobs haben das NXOpen-Verhalten festgestellt, das in
-[`../../skills/nx-live-scripting/references/verified-recipes.md`](../../skills/nx-live-scripting/references/verified-recipes.md)
+[`api-modelling.md`](../../skills/nx-live-scripting/references/api-modelling.md) / [`api-drafting.md`](../../skills/nx-live-scripting/references/api-drafting.md)
 als Regel steht. Sie liegen hier, damit jede Aussage dort nachprüfbar bleibt
 statt geglaubt werden zu müssen.
 

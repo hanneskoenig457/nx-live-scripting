@@ -3,7 +3,7 @@
 A double-click in the part navigator re-creates the feature's builder. Features
 built from a job can commit cleanly and still refuse that — most often because a
 builder property was left at an invalid default (see
-`skills/nx-live-scripting/references/verified-recipes.md`, section 0). The solid
+`skills/nx-live-scripting/references/api-modelling.md`, section 1). The solid
 and the drawing look fine, so nothing else catches it.
 
 This job does the double-click for every feature and reports which ones fail,

@@ -28,7 +28,8 @@ einsammelbar. Ordner nach Datenfluss: `01_host/` → `02_bridge/` → `03_jobs/`
 Erste vollständige Nutzung über eine reine API-Aufgabe hinaus: Modell aus
 Skizzen, Gewindebohrung mit Normdaten, Zeichnung aus Firmenvorlage, STEP AP214.
 Was dabei belegt wurde, steht in
-[verified-recipes.md](../skills/nx-live-scripting/references/verified-recipes.md);
+[api-modelling.md](../skills/nx-live-scripting/references/api-modelling.md) /
+[api-drafting.md](../skills/nx-live-scripting/references/api-drafting.md);
 jede Aussage dort nennt den Probe-Job, der sie stützt.
 
 - **Ursache für „Tolerance error" beim Wiederöffnen eines Revolve gefunden:**
