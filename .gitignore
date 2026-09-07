@@ -9,3 +9,9 @@ runs/
 # Lokale Vendor-API-Dokumentation aus der eigenen NX-Installation.
 # Lizenziert, nicht weitergeben.
 04_reference/NXOpen.xml
+
+# TU-Berlin-Kursvorlagen (CMTS): Kursmaterial und NX-Binaerdateien, keine
+# eigenen Erzeugnisse. Die README daneben bleibt versioniert und sagt, welche
+# Datei wofuer benutzt wird und wie sie in die VM kommt.
+templates/*
+!templates/README.md

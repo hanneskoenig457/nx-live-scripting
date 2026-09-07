@@ -3,6 +3,10 @@
 Teil: verifiziertes Modell (Run 20260906T153508Z-a28c46ac), per FullPath-Match
 wiederverwendet. VOR jedem Commit: DisplayPart-Check (kein Raten, keine
 Verschmutzung bei falschem Kontext).
+UEBERHOLT: CustomSize-Blaetter sind Probe/Scratch. Zeichnungen entstehen auf
+KUP_Zeichenvorlage.prt -- siehe spark3_zeichnungT.py und den Job-Contract.
+Dieser Job bleibt als Beleg der Runs stehen, die ihn zitieren.
+
 Blatt CustomSize 297x210 ohne Template (Firmen-Template liegt ausserhalb des
 Skills) -- daher keine Template-Completion-, keine Layer-256-Schritte.
 Ansichten je SOFORT upgedatet (Batch-Trap), Guards vor PDF-Export.

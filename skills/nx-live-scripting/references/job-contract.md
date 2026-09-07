@@ -53,6 +53,13 @@ SHA-256, and calls `main` with that directory as the only argument.
 - **Repaint deliberately.** The job runs as one uninterrupted block on the main
   thread, so NX only repaints when told: `view.UpdateDisplay()` after each
   feature. Without it a short job finishes faster than the eye follows.
+- **Every drawing goes on the company sheet template.** `KUP_Zeichenvorlage.prt`
+  (A3, frame + title block) via `SheetOption.UseTemplate` with the full VM path —
+  standing rule until said otherwise. A `CustomSize` sheet is a probe or scratch
+  only, never a deliverable draft: it carries no frame, no title block and no
+  general-tolerance note, so it cannot satisfy layer-3 rule §1. Call shape and
+  the two instantiation traps:
+  [api-drafting.md §1](api-drafting.md#1-sheet-from-the-company-template).
 - **`Regenerate()` before export and save, in every job that touches
   annotations.** `UpdateViews(All)` refreshes geometry only; the interactive
   session keeps showing stale annotation layout and missing tolerances while the
