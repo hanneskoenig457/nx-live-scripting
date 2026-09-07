@@ -67,10 +67,12 @@ Status per entry: **verified** (ran, with `result.json`) · **provisional**
 
 The documented route copies the template into
 `C:\Program Files\Siemens\NX…\UGII\templates` — that needs elevation. A full
-path works just as well. Drawings go on the company template **by default**
-(`…/nx/templates/` in the consuming project, VM-synced to
-`C:/Users/hanne/Documents/OnlineMachiningNX/templates/`); `CustomSize` sheets
-are probes and scratch only.
+path works just as well. Drawings go on the company template **by default** — the standing rule in
+[job-contract.md](job-contract.md). The canonical source is this toolkit's own
+`templates/` (see its README), VM-synced to
+`C:/Users/hanne/Documents/OnlineMachiningNX/templates/`, which is the path the
+jobs hold in their `TEMPLATE` constant. `CustomSize` sheets are probes and
+scratch only.
 
 ```python
 builder = part.DrawingSheets.DrawingSheetBuilder(None)
