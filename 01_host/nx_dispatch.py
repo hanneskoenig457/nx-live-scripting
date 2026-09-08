@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from nx_remote import ROOT, REMOTE, HOST, powershell
+from nx_remote import ROOT, REMOTE, HOST, powershell, scp
 
 
 def status():
@@ -47,7 +47,7 @@ def main():
     (local/'dispatch.json').write_text(json.dumps(request,indent=2))
     (local/'dispatch.request').write_text(remote.replace('/', '\\')+'\\job.py\n'+sha+'\n')
     upload = REMOTE+'/queue-dotnet/'+args.run+'.upload'
-    subprocess.run(['scp','-q',str(local/'dispatch.request'),HOST+':'+upload],check=True)
+    scp([str(local/'dispatch.request'),HOST+':'+upload],check=True)
     powershell(f"$ErrorActionPreference='Stop'; Move-Item '{upload}' '{REMOTE}/queue-dotnet/{args.run}.ready'",check=True)
     print('Submitted once:',args.run,flush=True)
     deadline=time.monotonic()+args.wait

@@ -34,11 +34,16 @@ Work from the project root; host Python is `.venv/bin/python`.
 ```sh
 .venv/bin/python 01_host/nx_dispatch.py status                 # always first
 .venv/bin/python 01_host/nx_bridge_install.py                  # only if not ready
-.venv/bin/python 01_host/nx_remote.py <job>.py --prepare-only  # archive + upload
+.venv/bin/python 01_host/nx_remote.py <job>.py --prepare-only  # lints, archives, uploads
 .venv/bin/python 01_host/nx_dispatch.py submit --run <run-id> --wait 90
 .venv/bin/python 01_host/nx_visible.py collect --run <run-id>
 ```
 
+0. `--prepare-only` runs `01_host/nx_lint.py` on the job first and refuses to
+   upload on a lint ERROR (warnings print but don't block) — it catches the
+   import-namespace-vs-class mistake, a missing `Tolerance` on a new builder,
+   and a missing `main(job_dir)` **before** a dispatch cycle is spent on them.
+   `--no-lint` forces an upload past a false positive.
 1. **Check `status` before anything else**, and again later in a long session —
    NX may have been closed or restarted meanwhile. Proceed only when `state` is
    `ready`, `session_id` is non-zero, and the heartbeat is fresh. `session_id 0`
@@ -71,19 +76,47 @@ Start from [assets/job-template.py](assets/job-template.py); it already has the
 correct shape. The full contract, including pacing for a watchable run and undo
 marks per agent step, is in [references/job-contract.md](references/job-contract.md).
 
-## Look the API up; do not recall it
+## Look the API up; do not recall it — cheapest source first, XML last
 
-`04_reference/NXOpen.xml` is the version-matched reference from the licensed
-installation. Search it before writing calls:
+Four sources exist, in **strict cost order**. Do not start at the bottom:
+
+1. **[SNIPPETS-modelling.md](references/SNIPPETS-modelling.md) /
+   [SNIPPETS-drafting.md](references/SNIPPETS-drafting.md)** — verified,
+   copy-paste Python for calls that have actually run against this NX version.
+   Check here **first**, always, before any lookup tool.
+2. **[api-modelling.md](references/api-modelling.md) /
+   [api-drafting.md](references/api-drafting.md)** — the narrative layer-4
+   files, when a snippet doesn't cover your exact case or you need the *why*
+   behind a trap.
+3. **Community sources** (NXJournaling, GitHub, Stack Overflow) for genuinely
+   new territory neither of the above covers. Still needs translating to
+   Python and a cheap probe-verified dispatch before being trusted — never
+   copy it in as-is, and it carries the same version-drift risk as the XML
+   below (code for a different NX release can look right and still not run).
+4. **`04_reference/NXOpen.xml`** — the version-matched .NET reference. **Last
+   resort only**, for a member that appears in none of the above:
 
 ```sh
 .venv/bin/python 04_reference/nx_api_lookup.py CreateCylinderBuilder
 ```
 
 It is a substring match on member names, so it only answers when the class name
-is already roughly known. It also carries two things worth reading in the hit:
-the **license requirements** and any **deprecation** note for that member —
-both fail at runtime otherwise.
+is already roughly known, and it matches across the **entire** NXOpen API, not
+just your area — a broad term like `Limits` alone matches ~150 members
+(~32,000 characters, ~8,000 tokens) in one call, nearly all unrelated to what
+you're building. The tool now caps output at 20 likely matches by default
+(`--all` for the rest) and prints a note when your term already appears in a
+SNIPPETS/api-\*.md file — read that note; it is pointing at a cheaper, already-
+verified answer. **Pass several narrowing terms together in one call** (they
+combine as OR) rather than making several separate broad single-term calls
+hunting for the same answer — that exact pattern burned 40,000+ tokens
+re-deriving a revolve's axis/Limits signature that was already sitting solved,
+verified, in SNIPPETS-modelling.md (2026-09-07, a fresh session that skipped
+straight to the XML without checking the snippet first).
+
+Two things are worth reading in every hit regardless of source: the **license
+requirements** and any **deprecation** note for that member — both fail at
+runtime otherwise.
 
 The XML documents **.NET** signatures while jobs are **Python**. That gap is the
 main source of plausible, non-running code. The systematic differences —
@@ -99,7 +132,11 @@ are building — [references/api-modelling.md](references/api-modelling.md) for
 geometry, [references/api-drafting.md](references/api-drafting.md) for sheets,
 views, dimensions and annotations. Each opens with an index table (what you
 want → entry point → trap) and closes with the routes that are known **not** to
-work, so they are not tried again.
+work, so they are not tried again. For a task already covered there, read
+[references/SNIPPETS-modelling.md](references/SNIPPETS-modelling.md) /
+[references/SNIPPETS-drafting.md](references/SNIPPETS-drafting.md) first —
+the same verified calls with the run-id narrative stripped out; drop back to
+the full layer-4 file only when a snippet fails or you need the *why*.
 
 The single most expensive trap, before anything else: several builders default
 `Tolerance` to `0.0`, commit happily, and fail only later — on re-opening the
@@ -116,7 +153,7 @@ Read top-down, extend bottom-up.
 | **1 Transport** | this file, [operations.md](references/operations.md), [job-contract.md](references/job-contract.md), [bridge-architecture.md](references/bridge-architecture.md) | How a job reaches NX, what it must satisfy, how to diagnose the bridge |
 | **2 Norm knowledge** | [norm-knowledge.md](references/norm-knowledge.md) | What a standard element *is* and which numbers its norm fixes. Placeholder + entry schema; fill one element per session from the norm original |
 | **3 Rules** | [dimensioning-rules.md](references/dimensioning-rules.md) | How to dimension norm-correctly, independent of NX: placement, order, symbols, fits, surface, edges, checklists. Part-specific values stay with the project |
-| **4 API** | [api-modelling.md](references/api-modelling.md) (geometry), [api-drafting.md](references/api-drafting.md) (drawing), [nxopen-python-notes.md](references/nxopen-python-notes.md) (the .NET↔Python gap) | Calls that have **actually run**, each with its run id or probe, plus the dead ends. Unlisted paths are unverified, not impossible |
+| **4 API** | [api-modelling.md](references/api-modelling.md) (geometry), [api-drafting.md](references/api-drafting.md) (drawing), [nxopen-python-notes.md](references/nxopen-python-notes.md) (the .NET↔Python gap), [SNIPPETS-modelling.md](references/SNIPPETS-modelling.md) / [SNIPPETS-drafting.md](references/SNIPPETS-drafting.md) (same calls, code-only) | Calls that have **actually run**, each with its run id or probe, plus the dead ends. Unlisted paths are unverified, not impossible |
 
 **Read rules before API.** Layer 3 first, layer 4 second — API-first reading
 optimises mechanism over conformity.
@@ -147,6 +184,17 @@ A mapping without a run behind it does not go in.
   cleanly. Before accepting a drawing, inspect the PDF for contours, dimension
   association, tolerance signs and layout, or make the job assert what it
   produced (`IsOutOfDate is False`, non-empty `AskVisibleObjects()`).
+  **A rendered view that looks right is not the same claim as "shows the
+  right thing"** — `IsOutOfDate is False` + visible objects only proves a
+  view rendered *something*; a base view can be fresh, populated, and still
+  be the wrong end of the part (2026-09-07: 'Right' showed a plain chamfered
+  end while the feature being checked sat at the other end, and the render
+  alone didn't catch it — a one-line table check would have, see
+  [api-drafting.md §3](references/api-drafting.md#3-view-placement)). When a
+  fact is checkable from data the job already has (a feature's known
+  position, a fixed view-direction table), assert it in the job instead of
+  reading a screenshot — reserve images for what genuinely has no cheap
+  programmatic check.
 - **Let the job check its own numbers.** A dimension can attach to the wrong
   geometry and still return a value that looks reasonable — a diameter
   associated to circular edges instead of the cylindrical face reports the axial

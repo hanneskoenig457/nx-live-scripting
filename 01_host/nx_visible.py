@@ -1,10 +1,9 @@
 """Start NX on the logged-in Windows desktop, or collect a prepared journal run."""
 import argparse
 import json
-import subprocess
 from pathlib import Path
 
-from nx_remote import HOST, REMOTE, ROOT, powershell
+from nx_remote import HOST, REMOTE, ROOT, powershell, scp
 
 
 def main():
@@ -36,7 +35,7 @@ Get-Process ugraf -ErrorAction SilentlyContinue | Select-Object Id,SessionId,Res
     destination = local / 'remote'
     destination.mkdir(exist_ok=True)
     # Copy the contents, so repeated collection never introduces a nested directory.
-    subprocess.run(['scp', '-q', '-r', HOST + ':' + remote + '/.', str(destination)], check=True)
+    scp(['-r', HOST + ':' + remote + '/.', str(destination)], check=True)
     report = destination / 'result.json'
     if not report.exists():
         print('Journal has not written a result yet; no successful execution claimed.')

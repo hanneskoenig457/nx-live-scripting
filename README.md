@@ -34,7 +34,8 @@ Nachschlagewerk beim Schreiben von Jobs.
 ```
 01_host/                      Mac-Seite: alles wird von hier aus angestoßen
   nx_bridge_install.py        Dispatcher bauen, sichtbares NX starten
-  nx_remote.py                Job archivieren und hochladen (+ Batch-Pfad)
+  nx_remote.py                Job archivieren und hochladen (+ Batch-Pfad), lintet vorher
+  nx_lint.py                  Statische Vorab-Pruefung eines job.py (Imports, Tolerance, main-Signatur)
   nx_dispatch.py              Jobs einreihen, Status, Stop
   nx_visible.py               NX starten, Ergebnisse einsammeln
 02_bridge/                    NX-Seite: der Dispatcher, den NX beim Start lädt
@@ -53,6 +54,8 @@ Nachschlagewerk beim Schreiben von Jobs.
 04_reference/                 Nachschlagen beim Schreiben von Jobs
   nx_api_lookup.py            Substring-Suche in NXOpen.xml
   NXOpen.xml                  API-Doku aus der eigenen Installation (gitignored)
+  nxopen_python_ref/          Lokaler Spiegel der öffentlichen Python-Doxygen-Referenz (gitignored)
+  mirror_nxopen_python_ref.py Aktualisiert diesen lokalen Spiegel
 docs/                         Aufbau, Belege, Recherchestand
 skills/nx-live-scripting/     Der Skill für Claude Code und Codex/GPT
 runs/nx/<run-id>/             Erzeugt: archivierte Source, Manifest, Ergebnisse

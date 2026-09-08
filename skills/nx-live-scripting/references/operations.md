@@ -40,6 +40,20 @@ in — without an interactive session there is nothing to be visible in.
 `nx_dispatch.py submit` refuses to queue anything when these do not hold. Do not
 work around that check.
 
+**Do not call `status` standalone immediately before every `submit`.** `submit`
+already performs this exact check and refuses cleanly if the bridge isn't
+ready — a separate `status` call right before it re-answers a question `submit`
+is about to answer anyway. In a full task session this habit alone measured
+19 redundant `status` calls out of 25 total (transcript analysis, 2026-09-08,
+99_4/99_5 sessions on the same task) — about 9% of that session's total token
+cost for zero additional safety, since the exact same guard already lives
+inside `submit`. Call `status` standalone only:
+
+- once at the start of a session,
+- right after a restart (`nx_bridge_install.py`) to confirm recovery,
+- or when actively diagnosing why a request is stuck (see the triage table
+  below) — not as a reflex before a routine dispatch.
+
 ## Queue semantics
 
 A request file moves by atomic rename: `.upload` → `.ready` → `.running` →

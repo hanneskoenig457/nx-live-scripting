@@ -6,6 +6,12 @@ For geometry use [api-modelling.md](api-modelling.md). *What* to dimension and
 read that **before** this one; API-first reading optimises mechanism over
 conformity.
 
+**Need working code fast, not the story behind it?** [SNIPPETS-drafting.md](SNIPPETS-drafting.md)
+has the sheet/view/title-block/PDF calls as plain copy-paste blocks with no
+rationale/run-id archaeology (dimensions and surface finish are flagged there
+as not yet snippet-stable — read the narrative for those). Come back to this
+file when a snippet fails or you need the *why*.
+
 Every call sequence here was executed against **NX 2506.3001** on this VM, in a
 visible session unless said otherwise. Run ids are the evidence.
 
@@ -32,6 +38,8 @@ Status per entry: **verified** (ran, with `result.json`) · **provisional**
 | Old iteration sheets off the navigator | Sheet has **no** `Delete()` — invisible undo mark + `AddToDeleteList([sheet])` + `DoUpdate`; cascades views/dims/notes | Prefix guard + explicit keep-list; model untouched. Run `20260907T062735Z-a68f9276` (12 deleted, 1 kept). [§7](#7-sheet-hygiene-and-framing-the-visible-sheet) |
 | Watcher sees the whole sheet | `final.Open()` → `part.Views.WorkView.Fit()` + `UpdateDisplay()` | Without `Fit` the window shows a zoomed section. Same run. [§7](#7-sheet-hygiene-and-framing-the-visible-sheet) |
 | Session shows stale annotations | `part.Views.Regenerate()` after annotation work, before export + save | `UpdateViews(All)` refreshes geometry only; `UpdateDisplay` alone healed nothing. [§8](#8-regenerate-the-call-that-refreshes-annotations) |
+| Which canned view shows a feature's end (not just "is it fresh") | Fixed table `CANNED_VIEW_X_END`, checked before creating the view | A live check via `AskVisibleObjects()` Tags is a dead end — view-local curves, not model faces. [§3](#3-view-placement) end |
+| Export a sheet to PDF | `part.PlotManager.CreatePrintPdfbuilder()` + `SourceBuilder.SetSheets([sheet])` + `Filename` + `Commit()` | `session.PlotManager` does not exist — it's on the part. [PDF export](#pdf-export) |
 
 ### Dimensions
 
@@ -135,6 +143,39 @@ case-insensitively, and write neutrals (`Name`, `Matrikel-Nr.`, …) as `-`.
 Runs `…df72d2f7` (accessor dead ends), `…bf811165` (labels), `…ae072278`
 (neutrals).
 
+**Correction, 2026-09-08** (run `20260907T222440Z-226cee6d`): the plain
+`TitleBlock` object returned by `part.DraftingManager.TitleBlocks` has **no**
+`Cells` property (`AttributeError`), and the `EditTitleBlockBuilder` itself
+exposes no enumerable cell collection either — only `Get/SetCellValueForLabel`.
+There is no verified runtime cell-label scan on this build — though see the
+correction below: `mvtp_probe_titleblock.py` (run `20260908T071811Z-35c87b00`)
+found `EditTitleBlockBuilder.Cells` after all (`.Length` = 13,
+`.FindItem(i).Label`/`.Text`), so a scan is possible; the `try/except` sweep
+below remains the simpler path when the labels are already known. Call
+`SetCellValueForLabel` directly with the known label string (this section
+already lists them: `Allgemeintoleranz`, `Material, wird automatisch
+ausgefüllt`, …), each in its own `try/except` so one unmatched label doesn't
+lose the rest:
+
+```python
+for label, value in (('Allgemeintoleranz', 'ISO 2768-m'),
+                      ('Material, wird automatisch ausgefüllt', '1.4301')):
+    try:
+        etb.SetCellValueForLabel(label, value)
+    except Exception:
+        ...  # record and continue
+```
+
+**`SetCellValueForLabel` does not raise on an unmatched label — it silently
+no-ops.** `'Material_manuell'` (a label that does not exist on this template;
+the real label is `'Material, wird automatisch ausgefüllt'`, see below) ran
+with no exception and reported success, but wrote nothing. A `try/except`
+around the call catches a real failure, not this one — after the sweep,
+re-read each cell's `.Text` (via `Cells.FindItem(i)`, above) and compare
+against what was intended before trusting a "set" report. Found rendering
+`mvtp_zeichnung.py`'s PDF to PNG and inspecting it (the Allgemeintoleranz/
+Werkstoff cells still showed template defaults), run `20260908T071154Z-82b788dc`.
+
 **Cells that ignore attributes** are edited directly. The verified chain, each
 step settled by one run: `TitleBlockCellBuilder.Text` is read-only →
 `EditableText` assigns silently without effect → `EditCell(a,b,c,d,e)` needs 5
@@ -145,10 +186,33 @@ Runs `20260907T072949Z-7c40caf8` (map: 13 cells with labels),
 (`cells_ok: true`, PDF-accepted title block).
 
 On the KUP template exactly two cells need this: cell 8 (`Allgemeintoleranz`)
-and cell 11 (`Material, wird automatisch ausgefüllt`); the other 11 follow
+and cell 11 (`Material, wird automatisch ausgefüllt` — despite the name, this
+is the manual-override cell, not an auto-filled one; there is no separate
+`Material_manuell` label on this template, confirmed by enumerating all 13
+cell labels, run `20260908T071811Z-35c87b00`); the other 11 follow
 attributes. KUP defaults that must be **overridden**: `Bezeichnung/Titel`,
-`Allgemeintoleranz`, `Material_manuell`, neutral `-` for course/personal
-fields, `Datum` as a time attribute.
+`Allgemeintoleranz`, `Material, wird automatisch ausgefüllt`, neutral `-` for
+course/personal fields, `Datum` as a time attribute.
+
+**Once a part carries more than one sheet, `DraftingManager.TitleBlocks[0]`
+is the OLDEST title block, not the one on the sheet just created.** Editing
+cells by a fixed index silently lands on the wrong sheet's title block once a
+second sheet exists — the write succeeds, `Commit()` raises nothing, but the
+sheet actually being exported still shows template defaults. Diff the tag set
+before/after creating the new sheet and edit only the block that is new:
+
+```python
+before = {int(b.Tag) for b in part.DraftingManager.TitleBlocks}
+sheet = create_sheet(part)            # DrawingSheetBuilder, as above
+new_blocks = [b for b in part.DraftingManager.TitleBlocks
+              if int(b.Tag) not in before]
+assert len(new_blocks) == 1
+```
+
+Found the same way as the silent-no-op above: rendering a second sheet's PDF
+after a first sheet already existed on the part showed template defaults
+despite a reported `'set'`. Fixed and reverified in run
+`20260908T072255Z-bf730d30` (`new_blocks: 1`, correct values in the render).
 
 `SCALE`/`WEIGHT`/`CAL_WEIGHT` fill from NX itself and are **not** settable from
 the API — leave them. Weight stays empty until a physical material is assigned
@@ -170,9 +234,18 @@ The working sequence, watcher-judged stepwise (`03_jobs/spark3_step*.py`):
 
 ```python
 view = sheet.SheetDraftingViews.CreateBaseView(model_view, Point3d(x, y, 0), scale, False)
-part.DraftingViews.UpdateViews(NXOpen.Drafting.ViewUpdateOption.All, [sheet])   # fills it
+part.DraftingViews.UpdateViews(NXOpen.Drawings.DraftingViewCollection.ViewUpdateOption.All, sheet)   # fills it
 view.MoveView(NXOpen.Point3d(x_abs, y_abs, 0.0))       # absolute SHEET coordinates
 ```
+
+**The enum and the overload above were both wrong in an earlier version of this
+note** — corrected 2026-09-08 (run `20260907T222440Z-226cee6d` hit both):
+the enum is `NXOpen.Drawings.DraftingViewCollection.ViewUpdateOption`, not
+`NXOpen.Drafting.ViewUpdateOption` (`AttributeError`); and of
+`DraftingViewCollection`'s three `UpdateViews` overloads
+(`(ViewUpdateOption)`, `(ViewUpdateOption, DrawingSheet)`, `(DraftingView[])`),
+the two-argument one takes a **single** `DrawingSheet`, not `[sheet]`
+(`TypeError`). Confirmed working from run `20260907T222811Z-e120df81` onward.
 
 1. blank sheet shows only the dashed frame (`…070035Z-6a1d4ae8`, empty frame
    flush at the frame edge),
@@ -199,6 +272,25 @@ on freshness after the collective `UpdateViews(All)` and proceed only when
 fresh. Run `20260906T191513Z-2480b9bc`. (The batch path has a sibling trap —
 [operations.md](operations.md), *The batch trap*.)
 
+**The collective `UpdateViews(All)` alone is not always enough either.**
+Run `20260907T222712Z-5443070b`: `front.IsOutOfDate` was still `True` right
+after `UpdateViews(All)` + `MoveView`. Fixed by retrying, calling **both**
+`part.DraftingViews.UpdateViews(All, sheet)` **and** the view's own
+`drafting_view.Update()`, gated on `IsOutOfDate is False` and a non-empty
+`AskVisibleObjects()`; 1–2 retries with a short pause resolved it every time
+(run `20260907T222811Z-e120df81` onward). A short retry loop is cheap and
+removes the need to guess how many update calls a given view will need:
+
+```python
+for attempt in range(5):
+    part.DraftingViews.UpdateViews(NXOpen.Drawings.DraftingViewCollection.ViewUpdateOption.All, sheet)
+    drafting_view.Update()
+    part.Views.WorkView.UpdateDisplay()
+    if drafting_view.IsOutOfDate is False and list(drafting_view.AskVisibleObjects()):
+        break
+    time.sleep(0.5)
+```
+
 **Layout acceptance is a host-side gate**, independent of API semantics: render
 the PDF (`pdftoppm -png -r 100`), threshold, collect horizontal runs longer than
 25 mm, assert left margin ≥ 10 mm and right edge ≤ 289 mm. Text and dust never
@@ -209,6 +301,69 @@ passed. `01_host/nx_check_result.py --gate-pdf` implements it.
 **Open (measured, not explained):** long rules touching x = 0.0 even though all
 placed content starts far right of it — view-border/centreline class suspected
 (they track views, not the sheet), identity not isolated.
+
+**Which canned view shows which end of the part — verified, don't re-derive
+per part.** 'Right' exposes the part's **max**-coordinate end along the
+model's long axis (its camera looks toward the origin from the positive
+side); 'Left' is diametrically opposite and exposes the **min**-coordinate
+end. Front/Top/Back/Bottom look along the other two axes and show the
+profile, not an axis-end. This is a fixed fact about NX's absolute-WCS named
+views (both first- and third-angle drafting convention agree on which axis
+each name looks along; only the sheet layout differs) — not part geometry —
+so check it once per axis convention and keep it as a table, not a live
+per-view query (the natural-seeming live check is a dead end, see below).
+Caught a real bug this way: a threaded hole placed at the part's min-X end
+was reported as shown by a 'Right' base view purely because the view was
+non-stale and had visible objects — neither of which says *which* end. Fixed
+by picking 'Left' and asserting the table match **before** creating any
+view, zero extra NX calls. Runs `20260907T191233Z-a97821e0` (confirms
+Right→max, the bug), `20260907T200346Z-8ea44fb6` (confirms Left→min, the fix).
+
+**Which canned view shows a Y/Z-oriented feature (e.g. a keyway cut with
+`Direction = (0, ±1, 0)`, [api-modelling.md §5](api-modelling.md#5-keyway-form-a-as-a-sketch-defined-extrusion)) — the same class of mistake, one axis over.**
+A feature cut on the far side of a view's camera does not render at all in
+this NX config (neither solid nor dashed — the same silent-drop mechanism as
+the occluded-circular-edge case below), so picking the wrong named view for a
+Y/Z-directional cut makes it vanish from that view exactly like the wrong
+X-end pick above, and the fix is the same shape: decode the camera direction
+from `ModelingView.Matrix` **before** creating the view, don't render-and-see.
+`Matrix` exposes `Xx,Xy,Xz,Yx,Yy,Yz,Zx,Zy,Zz`; its **Z-row is the direction
+from the model toward the viewer** (confirmed against the already-known
+Top→looks-along-−Z fact: Top's `Zx,Zy,Zz` = `(0,0,1)`, i.e. `+Z` toward the
+viewer, consistent with a camera above looking down):
+
+```python
+CANNED_VIEW_TOWARD_VIEWER = {          # (Zx, Zy, Zz) of ModelingView.Matrix
+    'Front': (0, -1, 0), 'Back': (0, 1, 0),      # Y axis
+    'Top': (0, 0, 1), 'Bottom': (0, 0, -1),      # Z axis
+    'Left': (-1, 0, 0), 'Right': (1, 0, 0),      # X axis (matches CANNED_VIEW_X_END)
+}
+```
+
+A feature cut with `Direction (0, +1, 0)` (material removed toward `+Y`) sits
+on the near/visible side of `Back` (toward-viewer `+Y`) and the far/hidden
+side of `Front` (toward-viewer `-Y`). Caught the same way as the X-end bug:
+a keyway built with `cut_direction=+1.0` did not appear in a `Front` base
+view at all, at any render resolution (600 dpi checked) — confirmed by
+probing `Front`'s own `Matrix` (`mvtp_probe_viewdir.py`,
+run `20260908T071653Z-50d132bb`) and fixed by switching the base view to
+`Back`, reverified by re-rendering the PDF (run `20260908T072255Z-bf730d30`).
+Verified on `Front`/`Back`/`Top`/`Bottom`/`Left`/`Right` in that same probe;
+`Left`/`Right`'s toward-viewer rows agree with the already-established
+`CANNED_VIEW_X_END` table above, cross-checking the decode.
+
+**A rotationally symmetric feature (e.g. a DIN 471 groove cut directly into
+the revolve profile) is a separate, still-open case — the Front/Back fix
+above does not apply to it.** Its radius step should change the true
+silhouette on every longitudinal view regardless of near/far side, yet it
+still did not render as an outline notch even from the corrected `Back` view
+(checked at 600 dpi, tight crop) — only its two boundary edges show, as short
+radial lines. Not explained by the near/far mechanism above; grouped with the
+occluded-circular-edge case in [Open mappings](#open-mappings-rule-known-api-path-not-verified)
+as the same class of unresolved small-feature silhouette gap. Runs
+`20260908T070517Z-cfe4ad0e` (groove geometry verified present via face
+radius), `20260908T072255Z-bf730d30` (still missing from the render after
+the view-side fix).
 
 ---
 
@@ -470,12 +625,76 @@ auto-layout, not corruption per se.
 
 ---
 
+## PDF export
+
+`part.PlotManager.CreatePrintPdfbuilder()` — **not** `session.PlotManager`
+(`AttributeError: 'NXOpen.Session' object has no attribute 'PlotManager'. Did
+you mean: 'XYPlotManager'?`). `PlotManager` lives on the `BasePart`. Its
+`SourceBuilder` is a `PlotSourceBuilder` with `SetSheets(list)` (there is no
+plain `Sheets` property to assign). Verified: probe `03_jobs/pk6_probe_pdf.py`
+(run `20260907T222123Z-7115648c`, member dump), used successfully in run
+`20260907T223720Z-0b0c669f` (133595-byte PDF, rendered to PNG via `pdftoppm`
+and visually inspected — frame, title block, views, dimensions all present).
+
+```python
+builder = part.PlotManager.CreatePrintPdfbuilder()
+builder.SourceBuilder.SetSheets([sheet])       # the DrawingSheet(s) to export
+builder.Filename = str(pdf_path)               # full path, VM-side
+builder.Commit()
+builder.Destroy()
+```
+
+Call this after `part.Views.Regenerate()` and `part.Save(...)`, not before —
+same ordering as any other export.
+
+---
+
 ## Open mappings: rule known, API path not verified
 
 Freistich callout as a drafting entity; associative ordinate/chain
 dimensioning; weld and edge-symbol builders. Keyway width in the **end** view
 (layer-3 rule F-2) — the Front placement that ran was expedience, the end-view
 association was never swept.
+
+**Occluded circular edges do not render as hidden (dashed) circles in a base
+end view, and the two obvious style toggles do not fix it.** A shaft's
+`Diameter20`/`Diameter19` circular edges, behind a `Diameter25` end face in a
+`RIGHT` base end view, were confirmed absent by rendering the exported PDF to
+PNG and visually inspecting it (only the outer boundary + a through-hole
+visible, even though the diametral *dimensions* referencing those edges were
+numerically correct via `ComputedSize`). `view.Style.HiddenLines.Hiddenline`
+and `.SelfHidden` both already read `True` by default; explicitly setting
+either to `True` again left `AskVisibleObjects()` at the same count (6).
+Probes `03_jobs/pk6_probe_hiddenline.py`, runs `20260907T223456Z-e4f3989e`,
+`20260907T223535Z-8e221985`. Mechanism unidentified — not further
+investigated; do not re-try just these two toggles without a new idea. The
+longitudinal view is **not** a ready fallback either: its direct
+cylindrical-face `CreateCylindricalDimension` route is a documented dead end
+on this build ([§4](#4-dimensions-the-general-shape)). Until one of the two is
+actually fixed, an end-view diametral dimension with the correct
+`ComputedSize` but no matching visible circle is the best verified option —
+acceptable because the number and the fit are both still correct and legible,
+just not visually anchored to a drawn circle.
+
+**A rotationally symmetric radius step (e.g. a DIN 471 retaining-ring groove
+built directly into the revolve profile) does not render as an outline notch
+in a longitudinal base view either, even on the near/visible side — likely
+the same class of issue as the occluded-circular-edge case above, but distinct
+from it: this feature is axisymmetric, so its true silhouette should change
+on every viewing angle regardless of near/far, and the [Front/Back
+near-far fix](#3-view-placement) that solves a directional (Y/Z) cut's
+visibility does not apply.** The groove's two boundary edges DO render (as
+short radial lines at each station), and its diametral dimension
+(`CreateDiameterDimension`, end view, [§4](#4-dimensions-the-general-shape))
+returns the correct `ComputedSize` — only the connecting top/bottom silhouette
+line fails to dip to the smaller radius between them. Checked at 600 dpi,
+tight crop on the exact station: no notch at any zoom level, so this is not
+a resolution artefact. Mechanism unidentified, not further investigated.
+Treat the same way as the occluded-circle case: trust the dimension and a
+supplementary leader note over the drawn outline, and flag the PDF for human
+review before treating it as visually complete. Runs `20260908T070517Z-cfe4ad0e`
+(groove geometry confirmed present via face radius measurement),
+`20260908T072255Z-bf730d30` (still missing from the render).
 
 A rule without a verified row above is dimensioned by hand after the job, or the
 job is extended first — **never by guessing a builder.**
@@ -513,6 +732,21 @@ is not an impossibility** — where the mechanism is unknown, that is said.
   settable from the API ([§2](#2-title-block-cells)).
 - **`part.Annotations.TitleBlocks`, `session.DraftingApplicationManager`,
   `CreateDiametralDimension`, `CreateRadialDimension`** — none of these exist.
+- **Checking "which end does this view show" via `view.AskVisibleObjects()`
+  Tag-matched against the model's own `Face` objects (from
+  `body.GetFaces()` / `uf.Modeling.AskFaceData`).** A drafting view's
+  `AskVisibleObjects()` returns **view-local drafting-curve/body objects**,
+  not the originating model `Face`/`Edge` objects — their Tags never
+  intersect, so every view answers "shows nothing" for every face, uniformly,
+  which looks like a broken view rather than a broken check. Mechanism
+  confirmed indirectly (three different views all producing empty
+  intersections including ones known-good from PDF render, run
+  `20260907T200032Z-6c4b8192`); the real per-view-curve identity is the one
+  [§5](#5-dimension-text-placement-via-the-builder) already documents
+  (`view.DraftingBodies.FindObject(...)` → `DraftingCurves.FindObject(...)`,
+  itself only reachable by searching, not by a direct Tag match to the
+  model). Use the verified-table approach above instead of a live check for
+  "which end" questions.
 
 Modelling dead ends live in
 [api-modelling.md](api-modelling.md#9-dead-ends-do-not-re-investigate).

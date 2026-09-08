@@ -10,6 +10,11 @@ runs/
 # Lizenziert, nicht weitergeben.
 04_reference/NXOpen.xml
 
+# Lokaler Spiegel der oeffentlichen Siemens-NXOpen-Python-Referenz.
+# Die statischen Vendor-Dateien dienen nur der lokalen Recherche und werden
+# deshalb ebenso nicht versioniert.
+04_reference/nxopen_python_ref/
+
 # TU-Berlin-Kursvorlagen (CMTS): Kursmaterial und NX-Binaerdateien, keine
 # eigenen Erzeugnisse. Die README daneben bleibt versioniert und sagt, welche
 # Datei wofuer benutzt wird und wie sie in die VM kommt.

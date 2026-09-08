@@ -3,6 +3,11 @@
 **Everything about building geometry is in this file.** For drawings, sheets,
 views, dimensions and annotations use [api-drafting.md](api-drafting.md).
 
+**Need working code fast, not the story behind it?** [SNIPPETS-modelling.md](SNIPPETS-modelling.md)
+has the same verified calls as plain copy-paste blocks with no rationale/
+run-id archaeology. Come back to this file when a snippet fails or you need
+the *why* behind a trap.
+
 Every call sequence here was executed against **NX 2506.3001** on this VM.
 Where a finding cost more than one attempt, the probe job or run id that
 settles it is named, so the claim can be re-checked rather than believed.
@@ -62,6 +67,17 @@ builder.Tolerance = 0.01          # any sane modelling tolerance
 showed the symptom and made the cause look like it was in the revolve's
 profile.
 
+**`RevolveBuilder.Limits` is an `AngularLimits`, with `StartExtend`/`EndExtend`
+— not `StartAngle`/`EndAngle`.** Same member names as `ExtrudeBuilder.Limits`
+(`GeometricUtilities.Limits`), different type. Confirmed live (probe
+`03_jobs/pk6_probe_revolve_limits.py`, run `20260907T220820Z-85e13bc5`):
+members `Distance, EndExtend, Null, StartExtend, SymmetricOption, Tag, Validate`.
+
+```python
+rev_builder.Limits.StartExtend.SetValue('0')
+rev_builder.Limits.EndExtend.SetValue('360')     # full revolve
+```
+
 **When any builder behaves strangely on commit or re-open, check whether it has
 a `Tolerance` and whether it is 0.** `03_jobs/feature_reedit_probe.py` catches
 this across a whole part before it is handed on ([operations.md](operations.md),
@@ -81,6 +97,24 @@ variant (runs `…4877773b` … `…98f585ef`), while an **associative smart axi
 `Axes.CreateAxis(point, direction, …)`, tolerance set) committed first try
 (run `…ba34dbe5`, `REVOLVED(2)`). Prefer the smart axis; do not assume the
 `Point3d` overload is equivalent.
+
+**Verified, 2026-09-07/08** (run `20260907T221229Z-58765390` onward, `REVOLVED(2)`
+committed and re-verified clean on a second part): `DirectionCollection.CreateDirection`
+has **no** `(Point, Vector3d, UpdateOption)` overload — passing a smart `Point`
+alongside a raw `Vector3d` fails `TypeError: No overload matches these
+arguments`. The associative smart-axis direction needs **two** smart `Point`s:
+
+```python
+axis_point = part.Points.CreatePoint(NXOpen.Point3d(0.0, 0.0, 0.0))
+axis_point2 = part.Points.CreatePoint(NXOpen.Point3d(1.0, 0.0, 0.0))
+axis_dir = part.Directions.CreateDirection(axis_point, axis_point2,
+                                            NXOpen.SmartObject.UpdateOption.WithinModeling)
+axis = part.Axes.CreateAxis(axis_point, axis_dir, NXOpen.SmartObject.UpdateOption.WithinModeling)
+```
+
+The `(Point3d, Vector3d, UpdateOption)` overload does exist (raw geometry, used
+for the *non-associative* axis above) — the point is that mixing a smart
+`Point` with a raw `Vector3d` is not a valid overload at all.
 
 ---
 
@@ -151,9 +185,47 @@ part.Layers.SetState(61, NXOpen.Layer.State.Hidden)
 part.Layers.WorkLayer = 1
 ```
 
+**`datum_objects` must be the actual `DatumPlane`/`Sketch` entities, not the
+owning `Feature`, and never an `Axis`.** Passing the `DatumPlaneFeature` itself
+(rather than the `NXOpen.DatumPlane` pulled from `feature.GetEntities()`, per
+the pattern above) fails `TypeError: ... found NXOpen.Features.DatumPlaneFeature`.
+An `Axis` object (from `Axes.CreateAxis`) is not a `DisplayableObject` at all —
+including it in the list fails `NXException: Cannot move a non-displayable
+entity to a layer`; just leave axes off any `MoveDisplayableObjects` call, they
+need no hiding. Runs `20260907T221229Z-58765390` (feature vs. entity),
+`20260907T221301Z-f8c1feb1` (axis).
+
 **Scope that sweep.** Template instantiation spawns `SKETCH_<Blatt>_000`; if the
 layer-21 sweep catches it, the drawing frame vanishes (observed, then scoped to
 `SKIZZE_*` + datums only). See [api-drafting.md §1](api-drafting.md#1-sheet-from-the-company-template).
+
+**Deleting a `SketchFeature` via `AddToDeleteList` DOES cascade to the curves
+that were `AddGeometry`'d into it — narrower than it first looks.** A failed
+job that had committed a keyway sketch (4 curves added successfully) plus a
+second sketch attempt that crashed on `sketch.SetName` *before* its own
+`AddGeometry` loop ran left two different kinds of leftover: deleting the
+first sketch feature's datum-plane+sketch pair also removed its 4 curves
+(count dropped 21→17 for a 2-feature delete); the second attempt's 4 curves,
+never added to any sketch, survived the same delete pass as ordinary loose
+curves (17, not 13) and needed a separate identification-and-delete step.
+**A curve genuinely owned by a kept feature and one merely left over from an
+aborted attempt are not distinguishable by geometry alone when both are
+plausible** (e.g. two candidate lines of the same length) — `curve.GetLength()`
+plus `int(curve.Tag)` (creation-order-adjacent tags cluster by dispatch) is
+enough to tell them apart with certainty; a live loose-curve `GetBoundingBox()`
+call was not attempted (not established as existing on `Curve` in this
+binding) and would in any case risk deleting a curve the kept revolve profile
+still needs if the identification were wrong — prefer the exact `Tag` match
+once curves are enumerated, never a heuristic delete. `body.GetEdges()` and
+`part.Curves` both give `edge.GetVertices()` (a `Point3d` list; NX2506
+apparently returns two identical vertices at the seam for a full circle,
+narrower than the earlier "no vertices at all" finding two paragraphs up —
+that finding was about **solid body** edges from `body.GetEdges()`; loose
+sketch/profile `Curve` objects from `part.Curves` behaved differently in this
+case) and `.GetLength()` for exactly this kind of identification. Runs
+`20260908T070418Z-bf8d866a` (probe: type+length+tag dump, 13 known-good vs.
+4 stray by signature), `20260908T070456Z-4bb4e936` (delete by exact `Tag`,
+verified clean: `curve_count == 13`, shaft geometry unchanged).
 
 ---
 

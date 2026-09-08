@@ -6,22 +6,55 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import time
 import uuid
+
+from nx_lint import check as lint_check
 
 ROOT = Path(__file__).resolve().parents[1]
 HOST = 'ansys-mechanical-vm'
 REMOTE = 'C:/Users/hanne/Documents/OnlineMachiningNX'
 NX = r'C:\Program Files\Siemens\NX2506\NXBIN\run_journal.exe'
 
+# ssh/scp reserve exit code 255 for a connection/auth failure that never reached
+# the remote side (vs. a remote command's own exit code, forwarded as-is) — so
+# retrying on 255 specifically is safe even for a non-idempotent remote command:
+# a 255 means it never ran. Observed transient 2026-09-07 ("Permission denied",
+# "Connection closed") mid-session against this VM; both were exit 255.
+SSH_CONNECTION_FAILURE = 255
+
+
+def run_ssh(cmd, retries=2, backoff=2.0, **kwargs):
+    """subprocess.run for an ssh/scp command, retrying only a connection-level
+    (exit 255) failure. A command that reached the remote side and failed there
+    keeps its own exit code and is never retried here."""
+    for attempt in range(retries + 1):
+        last_attempt = attempt == retries
+        try:
+            result = subprocess.run(cmd, **kwargs)
+        except subprocess.CalledProcessError as error:
+            if error.returncode != SSH_CONNECTION_FAILURE or last_attempt:
+                raise
+        else:
+            if result.returncode != SSH_CONNECTION_FAILURE or last_attempt:
+                return result
+        time.sleep(backoff * (attempt + 1))
+
+
 def powershell(script, **kwargs):
     encoded = base64.b64encode(("$ProgressPreference='SilentlyContinue'; " + script).encode('utf-16le')).decode()
-    return subprocess.run(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10',HOST,'powershell.exe -NoProfile -EncodedCommand '+encoded], **kwargs)
+    return run_ssh(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10',HOST,'powershell.exe -NoProfile -EncodedCommand '+encoded], **kwargs)
+
+
+def scp(args, **kwargs):
+    return run_ssh(['scp', '-q'] + args, **kwargs)
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('job')
     parser.add_argument('--parameters', type=Path)
     parser.add_argument('--prepare-only', action='store_true', help='Upload only; play the printed journal path in visible NX')
+    parser.add_argument('--no-lint', action='store_true', help='Skip nx_lint.py static checks (escape hatch for a false positive)')
     args=parser.parse_args()
     job=(ROOT/'03_jobs'/args.job).resolve()
     if not job.is_relative_to(ROOT/'03_jobs') or not job.is_file():
@@ -29,6 +62,14 @@ def main():
     source=job.read_bytes()
     if job.suffix == '.py':
         compile(source,str(job),'exec')
+        if not args.no_lint:
+            errors, warnings = lint_check(source.decode('utf-8'))
+            for w in warnings:
+                print('LINT WARNING:', w, flush=True)
+            if errors:
+                for e in errors:
+                    print('LINT ERROR:', e, flush=True)
+                parser.error(f'{len(errors)} lint error(s) — fix, or pass --no-lint to force upload anyway')
     elif job.suffix != '.cs':
         parser.error('Expected .py or .cs journal')
     archived_name = 'job' + job.suffix
@@ -42,14 +83,14 @@ def main():
     (local/'request.json').write_text(json.dumps({'host':HOST,'remote':remote,'job':str(job.relative_to(ROOT)),'sha256':hashlib.sha256(source).hexdigest(),'parameters':params},indent=2))
     print('Run:',local,flush=True)
     powershell(f"New-Item -ItemType Directory -Force -Path '{remote}' | Out-Null",check=True)
-    subprocess.run(['scp','-q',str(local/archived_name),str(local/'parameters.json'),HOST+':'+remote+'/'],check=True)
+    scp([str(local/archived_name),str(local/'parameters.json'),HOST+':'+remote+'/'],check=True)
     if args.prepare_only:
         (local/'outcome.json').write_text(json.dumps({'status':'prepared','execution':'interactive journal pending'},indent=2))
         print('Play this journal in visible NX:', remote+'/'+archived_name,flush=True)
         return 0
     with (local/'transport.log').open('wb') as log:
         result=powershell(f"Set-Location '{remote}'; & '{NX}' -nx '{remote}/{archived_name}' > '{remote}/stdout.txt' 2> '{remote}/stderr.txt'; $code=$LASTEXITCODE; Set-Content -Path '{remote}/exit-code.txt' -Value $code; exit $code",stdout=log,stderr=subprocess.STDOUT)
-    fetch=subprocess.run(['scp','-q','-r',HOST+':'+remote,str(local/'remote')])
+    fetch=scp(['-r',HOST+':'+remote,str(local/'remote')])
     ok=False
     report=local/'remote/result.json'
     if report.exists():

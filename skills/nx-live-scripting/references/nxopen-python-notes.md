@@ -54,8 +54,25 @@ Confirmed by the working jobs in this toolkit:
   `NXOpen.Features.CylinderBuilder.Types.AxisDiameterAndHeight`,
   `NXOpen.Drawings.DrawingSheetBuilder.SheetOption.CustomSize`,
   `NXOpen.Annotations.ToleranceType.BilateralTwoLines`,
-  `NXOpen.Part.Units.Millimeters`. Import the sub-namespace
-  (`import NXOpen.Features`) — `import NXOpen` alone does not bring it in.
+  `NXOpen.Part.Units.Millimeters`. **Two different bindings look identical in
+  code and are not:** a true .NET sub-namespace (`NXOpen.Features`,
+  `NXOpen.GeometricUtilities`, `NXOpen.Layer`, `NXOpen.UF`) needs its own
+  `import NXOpen.<Name>` — `import NXOpen` alone does not bring it in, e.g.
+  `part.Layers` (a `LayerManager`) works with plain `import NXOpen`, but
+  `NXOpen.Layer.State.Hidden` raises `AttributeError: module 'NXOpen' has no
+  attribute 'Layer'` without it (run `20260907T184808Z-c65bfc0d`). A class that
+  merely *looks* like a namespace because its nested enums print the same way
+  (`NXOpen.Sketch.ViewReorient.FalseValue`, `NXOpen.Sketch.UpdateLevel.Model`)
+  is **already available via plain `import NXOpen`** — `NXOpen.Sketch` is a
+  class (`T:NXOpen.Sketch` in the XML), not a package, so `import NXOpen.Sketch`
+  itself fails, and because it is a **module-level** import this crashes before
+  the job's own `try/except` ever runs: NX answers the whole dispatch with
+  `NXOpen.NXException: Unable to execute python script`, not a catchable
+  Python traceback in `result.json`. Before importing a sub-namespace, check the
+  XML: `T:NXOpen.<Name>` alone (no child `M:`/`F:` members whose owner is a
+  *different* outer type) is a class needing no import; genuine sibling
+  namespaces have many unrelated classes under that prefix. Run
+  `20260907T190220Z-36005835` (crash), fixed by dropping the import.
 - **Expressions take strings, not numbers.** `builder.Diameter.RightHandSide =
   '20'`. A float there is the wrong type, and a literal loses the parametric
   link that later edits depend on.
@@ -114,9 +131,26 @@ def enum_value(builder, prop, value):
 - **A method taking one object may still want a list.**
   `TitleBlocks.CreateEditTitleBlockBuilder` refuses a single `TitleBlock` and
   accepts `[title_block]`.
-- **`out` parameters come back as tuples, and not every element is a sequence.**
-  `UFSession.Modeling.AskFaceData` returns seven values; the fifth is a float
-  radius and the sixth a single float, not a list.
+- **A Python-scoping trap, not an NXOpen one, but it fires inside jobs the
+  same way: a module-level `import NXOpen.X` used only for a local helper,
+  written as a second `import NXOpen.X` statement INSIDE a function, makes
+  `NXOpen` a local name for that function's ENTIRE body** — including lines
+  before the import. `session = NXOpen.Session.GetSession()` at the top of
+  `build()` then fails with `UnboundLocalError: cannot access local variable
+  'NXOpen' where it is not associated with a value`, not an import error, at
+  the point of *first use*, which reads nothing like the actual cause.
+  Standard Python (any assignment or import anywhere in a function scopes the
+  name to that whole function) — always list every `import NXOpen.<X>` a job
+  needs once, at module level. Run `20260908T070844Z-fc0db083` (crash),
+  fixed in `20260908T070913Z-30115304`.
+- **`out` parameters come back as tuples, and not every element is a sequence,
+  and a "point" is not always a `Point3d`.** `UFSession.Modeling.AskFaceData`
+  returns seven values; the second (point) and third (direction) are plain
+  3-element **float lists** `[x, y, z]`, not `Point3d`/`Vector3d` objects —
+  `point.Y` raises `AttributeError: 'list' object has no attribute 'Y'`, use
+  `point[1]`. The fifth is a float radius and the sixth a single float, not a
+  list. Run `20260907T185100Z-9f8b4d52` (the failing `.Y` access),
+  `20260907T185157Z-9f8b4d52` (fixed, green).
 
 Expected from the .NET/Python binding in general, worth verifying against a real
 run before relying on them:
