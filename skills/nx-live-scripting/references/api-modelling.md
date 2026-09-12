@@ -78,6 +78,13 @@ rev_builder.Limits.StartExtend.SetValue('0')
 rev_builder.Limits.EndExtend.SetValue('360')     # full revolve
 ```
 
+**Correction, 2026-09-08** (run `20260908T210034Z-dde048e7`): the
+`Value.RightHandSide` shape also commits cleanly on this build
+(`builder.Limits.StartExtend.Value.RightHandSide = '0'`,
+`EndExtend… = '360'`, `REVOLVED(2)`, all radii green) — both shapes exist, so
+when in doubt sweep Value-first with a `SetValue` except-fallback and record
+which one ran.
+
 **When any builder behaves strangely on commit or re-open, check whether it has
 a `Tolerance` and whether it is 0.** `03_jobs/feature_reedit_probe.py` catches
 this across a whole part before it is handed on ([operations.md](operations.md),
@@ -323,6 +330,11 @@ feat = eb.CommitFeature(); eb.Destroy()
 Two traps that cost a probe each: `Direction` wants a `Direction` object, not a
 `Vector3d`; the boolean setter is named differently than `Block`'s.
 
+**Provisional, 2026-09-08** (run `20260908T210158Z-4519bbca`, asserted
+`20260908T210225Z-85a98bd5`): with `Direction (0, −1, 0)`, `StartExtend '6.5'`
+puts the pocket floor at *y = −6.5* — the sign follows the cut direction, so
+assert the floor with `abs()`, never a signed value.
+
 **Edge-type lesson:** an extruded floor boundary may report a non-`Linear` edge
 type — match floor edges by vertices (both Y≈floor, mid-Z≈±half-width, length),
 never by `SolidEdgeType`.
@@ -398,6 +410,11 @@ Working path, no NX session needed — the standalone translator:
 ```cmd
 STEP214UG\step214ug.exe <in.prt> o=<out.stp> d=STEP214UG\ugstep214.def l=<out.log>
 ```
+
+Paths are rooted at the install dir, **not** `NXBIN`: `C:\Program Files\Siemens\NX2506\STEP214UG\step214ug.exe`
+and `…\STEP214UG\ugstep214.def` (a `Test-Path` under `NXBIN\STEP214UG` answers
+`False`). Verified 2026-09-08: CWD = target dir, exe + absolute `d=` → EXIT 0,
+23 KB, `AUTOMOTIVE_DESIGN … 214`, 19 `ADVANCED_FACE`, 1 `CLOSED_SHELL`.
 
 Verified 2026-09-06 on the SPARK2 part: 25 KB, schema
 `AUTOMOTIVE_DESIGN {1 0 10303 214…}`, 21 `ADVANCED_FACE`, 1 `CLOSED_SHELL`,

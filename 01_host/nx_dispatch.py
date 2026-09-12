@@ -6,7 +6,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from nx_remote import ROOT, REMOTE, HOST, powershell, scp
+from nx_remote import ROOT, CODE, REMOTE, HOST, powershell, scp
 
 
 def status():
@@ -54,7 +54,7 @@ def main():
     while args.wait and time.monotonic()<deadline:
         check=powershell(f"Test-Path '{remote}/bridge-execution.json'",capture_output=True,text=True,check=True)
         if check.stdout.strip()=='True':
-            return subprocess.run([sys.executable,str(ROOT/'01_host/nx_visible.py'),'collect','--run',args.run]).returncode
+            return subprocess.run([sys.executable,str(CODE/'01_host/nx_visible.py'),'collect','--run',args.run]).returncode
         time.sleep(1)
     return 0
 

@@ -148,6 +148,30 @@ def probe(out, result):
             if obj is not None:
                 safe(lambda o=obj: o.Destroy())
 
+    def expected_missing_feature_creator(label, member, alternative):
+        """Make a known stale factory an explicit passing negative check."""
+        try:
+            getattr(part.Features, member)
+        except AttributeError:
+            api.setdefault('expected_missing_feature_creators', {})[label] = {
+                'status': 'expected_missing',
+                'member': 'FeatureCollection.' + member,
+                'reason': 'Absent from the NX 2506 Python guide and NXOpen.xml.',
+                'documented_alternative': alternative,
+            }
+        except Exception as error:
+            api.setdefault('expected_missing_feature_creators', {})[label] = {
+                'status': 'lookup_error',
+                'member': 'FeatureCollection.' + member,
+                'error': str(error)[:600],
+            }
+        else:
+            api.setdefault('expected_missing_feature_creators', {})[label] = {
+                'status': 'unexpectedly_present',
+                'member': 'FeatureCollection.' + member,
+                'warning': 'Not part of the documented NX 2506 public API; probe before use.',
+            }
+
     builder_probe('section_view_builder', lambda: part.DraftingViews.CreateSectionViewBuilder(None))
     builder_probe('detail_view_builder', lambda: part.DraftingViews.CreateDetailViewBuilder(None))
     builder_probe('section_in_view_builder', lambda: part.DraftingViews.CreateSectionInViewBuilder(None))
@@ -155,8 +179,11 @@ def probe(out, result):
     builder_probe('surface_finish_builder',
                   lambda: part.Annotations.DraftingSurfaceFinishSymbols
                   .CreateDraftingSurfaceFinishBuilder(None))
-    builder_probe('symbolic_thread_builder',
-                  lambda: part.Features.CreateSymbolicThreadBuilder(None))
+    expected_missing_feature_creator(
+        'symbolic_thread_factory',
+        'CreateSymbolicThreadBuilder',
+        'CreateThreadBuilder or CreateHolePackageBuilder for a threaded hole',
+    )
     builder_probe('centerline_builder',
                   lambda: part.Annotations.Centerlines.CreateCenterlineBuilder(None))
     result['api'] = api

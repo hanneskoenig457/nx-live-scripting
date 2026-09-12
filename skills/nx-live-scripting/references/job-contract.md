@@ -85,6 +85,15 @@ SHA-256, and calls `main` with that directory as the only argument.
   returns a rich state snapshot costs one dispatch cycle; N small queries cost N.
 - **Split a long construction into several dispatched jobs** when the user should
   inspect NX in between. There is no way to pause or cancel a running job.
+- **Follow-up jobs extend the live session state — they never rebuild it.**
+  The session outlives every job, so a committed feature exists exactly once:
+  find the part per `FullPath` (re-open only if absent) and add the next
+  feature on top. **Correction, 2026-09-08** (runs `20260908T210034Z-dde048e7`
+  → `…0158Z-4519bbca` → `…0225Z-85a98bd5`): J1 revolved once (`REVOLVED(2)`)
+  and saved; J2 found the loaded part, cut only the keyway (old radii
+  unchanged, only R3 walls + floor added); J3 re-found the same in-memory
+  part including J2's unsaved extrude and added only the thread. A re-run of
+  J1 would have failed on the loaded part name instead.
 - **Check annotation CONTENT against the norm checklist, not just its
   mechanics.** A sweep that optimizes associativity/placement silently drops
   content details (remain markings, short-form wordings, limit deviations).

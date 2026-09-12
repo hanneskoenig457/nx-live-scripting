@@ -1,6 +1,10 @@
 # Operating the bridge
 
-All commands run from the project root. Host Python is `.venv/bin/python`.
+All commands run from the project root with the toolkit's host Python, e.g.
+`NX_PROJECT_ROOT=$PWD /…/08_NX_API/.venv/bin/python
+/…/08_NX_API/01_host/nx_dispatch.py status` — the toolkit code is referenced,
+never copied; `NX_PROJECT_ROOT` carries jobs (`03_jobs/`) and evidence
+(`runs/`). Unset it to work directly in the toolkit.
 
 ## Commands
 

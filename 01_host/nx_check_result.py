@@ -30,12 +30,14 @@ Prints a JSON report; exit 0 only when every applicable check passes.
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+CODE = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ['NX_PROJECT_ROOT']) if os.environ.get('NX_PROJECT_ROOT') else CODE
 FINDINGS = []
 
 

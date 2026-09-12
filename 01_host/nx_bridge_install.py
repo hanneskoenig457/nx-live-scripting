@@ -7,14 +7,14 @@ Nothing outside the project directory and one scheduled task is modified.
 """
 import subprocess
 import sys
-from nx_remote import ROOT, HOST, REMOTE, powershell
+from nx_remote import ROOT, CODE, HOST, REMOTE, powershell
 
 NXBIN = r'C:\Program Files\Siemens\NX2506\NXBIN'
 BRIDGE = REMOTE + '/bridge'
 
 powershell(f"New-Item -ItemType Directory -Force '{BRIDGE}','{BRIDGE}/startup' | Out-Null", check=True)
 for name in ['VisibleBridge.cs', 'start-visible.cmd']:
-    subprocess.run(['scp', '-q', str(ROOT / '02_bridge' / name), HOST + ':' + BRIDGE + '/' + name], check=True)
+    subprocess.run(['scp', '-q', str(CODE / '02_bridge' / name), HOST + ':' + BRIDGE + '/' + name], check=True)
 
 powershell(rf"""
 $ErrorActionPreference='Stop'

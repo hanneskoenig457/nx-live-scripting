@@ -79,12 +79,46 @@ def probe(out, result):
             if obj is not None:
                 safe(lambda o=obj: o.Destroy())
 
+    def expected_missing_feature_creator(label, member, alternative):
+        """Record stale, undocumented factory names as a passing negative check."""
+        try:
+            getattr(part.Features, member)
+        except AttributeError:
+            api.setdefault('expected_missing_feature_creators', {})[label] = {
+                'status': 'expected_missing',
+                'member': 'FeatureCollection.' + member,
+                'reason': 'Absent from the NX 2506 Python guide and NXOpen.xml.',
+                'documented_alternative': alternative,
+            }
+        except Exception as error:
+            api.setdefault('expected_missing_feature_creators', {})[label] = {
+                'status': 'lookup_error',
+                'member': 'FeatureCollection.' + member,
+                'error': str(error)[:600],
+            }
+        else:
+            api.setdefault('expected_missing_feature_creators', {})[label] = {
+                'status': 'unexpectedly_present',
+                'member': 'FeatureCollection.' + member,
+                'warning': 'Not part of the documented NX 2506 public API; probe before use.',
+            }
+
     builder_probe('hole_package', lambda: part.Features.CreateHolePackageBuilder(None),
                   children=('ThreadDimension', 'Diameter', 'Depth', 'HoleDiameter'))
-    builder_probe('symbolic_thread', lambda: part.Features.CreateSymbolicThreadBuilder(None))
+    # Negative compatibility checks, not candidates for new jobs.  Keeping the
+    # names as strings also prevents API audits from counting them as supported.
+    expected_missing_feature_creator(
+        'symbolic_thread_factory',
+        'CreateSymbolicThreadBuilder',
+        'CreateThreadBuilder or CreateHolePackageBuilder for a threaded hole',
+    )
     builder_probe('thread', lambda: part.Features.CreateThreadBuilder(None))
     builder_probe('chamfer', lambda: part.Features.CreateChamferBuilder(None))
-    builder_probe('groove', lambda: part.Features.CreateGrooveBuilder(None))
+    expected_missing_feature_creator(
+        'modelling_groove_factory',
+        'CreateGrooveBuilder',
+        'The documented weld API is WeldManager.CreateWeldGrooveBuilder; it is not a modelling feature builder',
+    )
     builder_probe('slot', lambda: part.Features.CreateSlotBuilder(None))
     builder_probe('sketch_in_place', lambda: part.Sketches.CreateSketchInPlaceBuilder2(None))
     builder_probe('datum_plane', lambda: part.Features.CreateDatumPlaneBuilder(None))

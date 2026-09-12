@@ -647,6 +647,18 @@ builder.Destroy()
 Call this after `part.Views.Regenerate()` and `part.Save(...)`, not before —
 same ordering as any other export.
 
+**Gate before `Commit()`: helpers must be invisible, or they print.**
+Loose profile curves, sketches and datum planes that are still on a visible
+layer are drawn into every drafting view — including the exported PDF — with
+no error anywhere. Hiding them is [api-modelling.md
+§3](api-modelling.md#3-sketches-datums-and-why-loose-curves-are-a-defect)
+(`MoveDisplayableObjects` to 21/61 + `SetState(Hidden)`), but hiding alone is
+not the claim: assert the states right here
+(`part.Layers.GetState(21) is Hidden`, same for 61) before committing the
+PDF, and inspect the render for stray lines before calling the drawing done.
+Verified 2026-09-08 (run `20260908T210544Z-3bd57207`: helpers hidden in J1–J3,
+render clean, 9/9 dims green).
+
 ---
 
 ## Open mappings: rule known, API path not verified

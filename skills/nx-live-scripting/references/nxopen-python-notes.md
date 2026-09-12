@@ -114,6 +114,17 @@ def enum_value(builder, prop, value):
     raise AttributeError('%s.%s has no value %s' % (type(builder).__name__, prop, value))
 ```
 
+  The **installed 2506.3001 `.pyi` stubs are useful for discovery, but not a
+  completeness oracle**. A static audit of all 44 current job sources found
+  106/121 direct `NXOpen…` paths verbatim; `NXOpen.UF` is absent from the stub
+  tree altogether, while runtime-flat aliases such as
+  `HolePackageBuilderTypes` occur in the stubs only as nested names such as
+  `HolePackageBuilder.Types`. A missing stub hit therefore means “look in the
+  XML, online guide, or a probe”, not “the call does not exist”. Conversely,
+  `PartCollection.SetDisplayPart` is absent both from the stubs and at runtime
+  (run `20260906T153356Z-b6c429e7`); use the actually exposed name, after a
+  probe, rather than assuming a near match is valid.
+
 - **Reserved words get a suffix.** `NXOpen.Sketch.ViewReorient.False` is not
   valid Python; the member is `FalseValue`, matching the already-used
   `BasePart.CloseAfterSave.FalseValue`.

@@ -14,8 +14,11 @@ shipped from the Mac over the existing SSH/SCP connection.
 The toolkit that implements this lives at
 `/Users/hanne/Documents/Developer/08_NX_API`, numbered along the data flow:
 `01_host/` (Mac CLI) → `02_bridge/` (dispatcher NX loads) → `03_jobs/` (what
-runs inside NX) → `04_reference/` (API lookup). A project that uses it holds a
-copy of the same layout.
+runs inside NX) → `04_reference/` (API lookup). **Correction, 2026-09-09:**
+a project no longer holds a copy of that layout — it keeps only `03_jobs/`
+(jobs), `runs/` (evidence) and its deliverables, and points the toolkit at
+itself via `NX_PROJECT_ROOT` (unset = work directly in the toolkit). Verified
+with `20260909T061426Z-913deadf`, dispatched end to end from a thin project.
 
 ## Prefer the visible session; batch is the fallback
 
@@ -76,24 +79,39 @@ Start from [assets/job-template.py](assets/job-template.py); it already has the
 correct shape. The full contract, including pacing for a watchable run and undo
 marks per agent step, is in [references/job-contract.md](references/job-contract.md).
 
-## Look the API up; do not recall it — cheapest source first, XML last
+## Look the API up; do not recall it — verified Python first, XML last
 
-Four sources exist, in **strict cost order**. Do not start at the bottom:
+Five sources exist, in **strict cost order**. Do not start at the bottom:
 
 1. **[SNIPPETS-modelling.md](references/SNIPPETS-modelling.md) /
    [SNIPPETS-drafting.md](references/SNIPPETS-drafting.md)** — verified,
    copy-paste Python for calls that have actually run against this NX version.
    Check here **first**, always, before any lookup tool.
-2. **[api-modelling.md](references/api-modelling.md) /
+2. **Local NXOpen Python Reference Guide** — the canonical public Python API
+   reference at `04_reference/nxopen_python_ref/index.html`. A human uses its
+   Doxygen search field; an agent queries that exact local Doxygen index, never
+   `rg` over the mirrored HTML tree:
+
+```sh
+.venv/bin/python 04_reference/nxopen_python_search.py CreateCylinderBuilder
+```
+
+   A missing Guide hit is evidence against the proposed Python name, not a
+   reason to guess a plausible factory call. Use the 2506.3001 Python stubs
+   only as a secondary reading aid for malformed Doxygen enum tables; after a
+   value-for-value comparison, the local mirror displays a labelled repair
+   table for affected pages. The stubs do not replace the Guide and omit its
+   `NXOpen.UF` coverage.
+3. **[api-modelling.md](references/api-modelling.md) /
    [api-drafting.md](references/api-drafting.md)** — the narrative layer-4
    files, when a snippet doesn't cover your exact case or you need the *why*
    behind a trap.
-3. **Community sources** (NXJournaling, GitHub, Stack Overflow) for genuinely
+4. **Community sources** (NXJournaling, GitHub, Stack Overflow) for genuinely
    new territory neither of the above covers. Still needs translating to
    Python and a cheap probe-verified dispatch before being trusted — never
    copy it in as-is, and it carries the same version-drift risk as the XML
    below (code for a different NX release can look right and still not run).
-4. **`04_reference/NXOpen.xml`** — the version-matched .NET reference. **Last
+5. **`04_reference/NXOpen.xml`** — the version-matched .NET reference. **Last
    resort only**, for a member that appears in none of the above:
 
 ```sh

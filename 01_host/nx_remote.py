@@ -4,6 +4,7 @@ import base64
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -11,7 +12,13 @@ import uuid
 
 from nx_lint import check as lint_check
 
-ROOT = Path(__file__).resolve().parents[1]
+CODE = Path(__file__).resolve().parents[1]
+ROOT = Path(os.environ['NX_PROJECT_ROOT']) if os.environ.get('NX_PROJECT_ROOT') else CODE
+if not (ROOT / '03_jobs').is_dir():
+    raise RuntimeError(
+        f'NX_PROJECT_ROOT={ROOT} has no 03_jobs/ — point it at a project '
+        'directory holding 03_jobs/ (jobs) and runs/ (evidence), or unset '
+        'it to work directly in the toolkit.')
 HOST = 'ansys-mechanical-vm'
 REMOTE = 'C:/Users/hanne/Documents/OnlineMachiningNX'
 NX = r'C:\Program Files\Siemens\NX2506\NXBIN\run_journal.exe'

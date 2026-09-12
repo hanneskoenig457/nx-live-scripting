@@ -53,6 +53,7 @@ QUOTED_RESOURCE = re.compile(
     r"[\"'](?P<url>[^\"']+?\.(?:css|gif|html?|ico|jpe?g|js|map|png|svg|ttf|webp|woff2?))(?:\?[^\"']*)?[\"']",
     re.IGNORECASE,
 )
+SEARCH_SECTION = re.compile(r'^\s*(?P<id>\d+):\s*"(?P<value>[^"]*)"', re.MULTILINE)
 
 BASE_PARTS = urlsplit(BASE_URL)
 BASE_PATH = PurePosixPath(unquote(BASE_PARTS.path))
@@ -121,6 +122,35 @@ def extract_links(text: str, page_url: str) -> Iterable[str]:
     for pattern in (ATTRIBUTE_URL, CSS_URL, QUOTED_RESOURCE):
         for match in pattern.finditer(text):
             link = canonical_url(match.group("url"), page_url)
+            if link is not None:
+                yield link
+    yield from dynamic_search_links(text, page_url)
+
+
+def dynamic_search_links(text: str, page_url: str) -> Iterable[str]:
+    """Expand Doxygen's dynamically constructed per-letter search indexes.
+
+    ``search.js`` builds names such as ``search/classes_0.js`` from the two
+    maps in ``searchdata.js``.  As those filenames never occur literally in
+    the HTML or JavaScript, a conventional static crawler cannot find them.
+    """
+    page_path = PurePosixPath(unquote(urlsplit(page_url).path))
+    if page_path != BASE_PATH / "search" / "searchdata.js":
+        return
+
+    maps = re.findall(r"var\s+(indexSectionsWithContent|indexSectionNames)\s*=\s*\{(.*?)\};", text, re.DOTALL)
+    sections = {
+        name: {int(match.group("id")): match.group("value") for match in SEARCH_SECTION.finditer(body)}
+        for name, body in maps
+    }
+    contents = sections.get("indexSectionsWithContent", {})
+    names = sections.get("indexSectionNames", {})
+    for section_id, characters in contents.items():
+        section_name = names.get(section_id)
+        if section_name is None:
+            continue
+        for index, _ in enumerate(characters):
+            link = canonical_url(f"{section_name}_{index:x}.js", page_url)
             if link is not None:
                 yield link
 
@@ -265,6 +295,34 @@ def mirror(
     return 0
 
 
+def verify(destination: Path) -> int:
+    """Report local Doxygen resource links whose target is not in the mirror."""
+    missing: list[tuple[Path, Path]] = []
+    checked = 0
+    for source in destination.rglob("*"):
+        if not source.is_file() or source.suffix.lower() not in TEXT_SUFFIXES:
+            continue
+        relative_source = source.relative_to(destination).as_posix()
+        page_url = BASE_URL + relative_source
+        text = source.read_text(encoding="utf-8", errors="replace")
+        for url in extract_links(text, page_url):
+            target = local_path(url, destination)
+            checked += 1
+            if not target.is_file():
+                missing.append((source.relative_to(destination), target.relative_to(destination)))
+
+    print(f"{checked} lokale Doxygen-Referenzen in {destination} geprüft.")
+    if not missing:
+        print("OK: Alle geprüften lokalen Ressourcen sind vorhanden.")
+        return 0
+    print(f"FEHLER: {len(missing)} lokale Referenz(en) fehlen:", file=sys.stderr)
+    for source, target in missing[:30]:
+        print(f"  {source} -> {target}", file=sys.stderr)
+    if len(missing) > 30:
+        print(f"  ... und {len(missing) - 30} weitere", file=sys.stderr)
+    return 1
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", type=Path, default=DEFAULT_DESTINATION)
@@ -281,7 +339,36 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="auch bereits lokal vorhandene Ressourcen erneut herunterladen",
     )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="nur bereits vorhandene lokale Doxygen-Referenzen pruefen",
+    )
+    parser.add_argument(
+        "--no-enum-repair",
+        action="store_true",
+        help="nach einem erfolgreichen Standard-Spiegel keine lokalen Enum-Tabellen reparieren",
+    )
     return parser.parse_args()
+
+
+def repair_enum_tables(destination: Path) -> None:
+    """Reapply labelled local enum fixes after a vendor-page refresh."""
+    if destination != DEFAULT_DESTINATION.resolve():
+        print("Enum-Reparatur uebersprungen: benutzerdefiniertes Spiegelziel.")
+        return
+    try:
+        from repair_nxopen_python_enum_tables import apply_repairs, audit
+
+        report, repairs = audit()
+        changed = apply_repairs(repairs)
+    except (FileNotFoundError, OSError, ValueError) as error:
+        print(f"WARNUNG: lokale Enum-Reparatur nicht ausgefuehrt: {error}", file=sys.stderr)
+        return
+    print(
+        f"Lokale Enum-Reparatur: {changed} Seite(n) aktualisiert "
+        f"({report.repaired_pages} unstrukturierte Vendor-Tabellen)."
+    )
 
 
 def main() -> int:
@@ -289,13 +376,18 @@ def main() -> int:
     if args.workers < 1 or args.request_interval < 0:
         print("--workers muss mindestens 1 und --request-interval mindestens 0 sein.", file=sys.stderr)
         return 2
-    return mirror(
+    if args.verify:
+        return verify(args.destination.resolve())
+    result = mirror(
         args.destination.resolve(),
         args.workers,
         args.timeout,
         args.refresh,
         args.request_interval,
     )
+    if result == 0 and not args.no_enum_repair:
+        repair_enum_tables(args.destination.resolve())
+    return result
 
 
 if __name__ == "__main__":
