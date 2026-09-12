@@ -92,8 +92,9 @@ Darüber liegt inzwischen eine eigene deklarative High-Level-Schicht:
 validierten, einmal eingereihten NX-Job. Eigenen NXOpen-Code schreibt der Skill
 erst, wenn diese Schicht und die verifizierten Low-Level-Snippets nicht reichen.
 Die VM-seitige Dispatcher-Assembly wurde dafür nicht verändert.
-Konkret sind das ein registriertes MCP-Tool und derzeit elf interne
-Planoperationen; der verifizierte Box-Akzeptanzplan verwendet neun davon.
+Konkret sind das ein registriertes MCP-Tool und 16 interne Planoperationen;
+Contract v2 ergänzt Status, evidence-sicheres Open/Close, planlokales Undo und
+den verifizierten STEP-AP214-Translator.
 
 Die projektgebundenen Namen stecken deshalb noch im Code und sind Aufgabe 1:
 

@@ -46,15 +46,21 @@ async def nx_run_plan(
     """Execute an atomic high-level NX plan.
 
     Every operation has ``tool``, optional ``id``, and optional ``args``.
-    The certified operations are: nx_create_part, nx_create_sketch,
+    The 16 certified operation names are nx_status, nx_create_part,
+    nx_open_part, nx_save_part, nx_close_part, nx_export_step,
+    nx_list_sketches, nx_list_bodies, nx_list_features, nx_create_sketch,
     nx_sketch_line, nx_sketch_rectangle, nx_finish_sketch, nx_extrude,
-    nx_list_sketches, nx_list_bodies, nx_list_features, nx_fit_view, and
-    nx_save_part.  A plan starts with nx_create_part.  nx_create_sketch needs
-    an id; later sketch operations refer to that id through args.sketch.
-    Currently only the locally verified XZ sketch plane is accepted.
-    Unknown fields, arbitrary code, and paths outside the run directory are
-    rejected before upload.  A failed NX step rolls all model operations after
-    creation of the unique run-local part back; the empty container remains.
+    nx_undo, and nx_fit_view. A stateful plan starts with nx_create_part or
+    nx_open_part; status-only plans are allowed. An opened input is copied from
+    the project into immutable run evidence before NX touches it. Paths are
+    relative to the project/run workspace. nx_create_sketch needs an id; later
+    sketch operations refer to it through args.sketch. nx_undo reverses the
+    last model mutation in the same plan. Save, close, and STEP export are
+    terminal except for a following nx_status. Currently only the locally
+    verified XZ sketch plane is accepted. Unknown fields and arbitrary code are
+    rejected before upload. A failed NX step rolls model operations after the
+    run-local part was created or opened back when the NX undo boundary remains
+    valid.
     """
     raw_operations = [
         operation.model_dump(mode="json", exclude_none=True) for operation in operations

@@ -39,6 +39,23 @@ assert str(session.Parts.Display.FullPath).replace('\\', '/').lower() == wanted
 exists` — the search loop above is what avoids it. Full context:
 [api-modelling.md §2](api-modelling.md#2-getting-onto-the-right-part).
 
+## Close exactly one active part without a dialog
+
+```python
+if save:
+    part.Save(NXOpen.BasePart.SaveComponents.TrueValue,
+              NXOpen.BasePart.CloseAfterSave.FalseValue)
+part.Close(NXOpen.BasePart.CloseWholeTree.TrueValue,
+           NXOpen.BasePart.CloseModified.CloseModified,
+           None)
+```
+
+`CloseModified` permits the modified part to close; it does not itself save.
+Call `Save` first only when persistence was requested. Verified on a run-local,
+SHA-256-checked copy in visible run `20260912T194302Z-c723423b`: one body was
+listed, `save=False` closed the copy, and the following status reported no
+active part. Full context: [api-modelling.md §2](api-modelling.md#2-getting-onto-the-right-part).
+
 ## Datum plane + real Sketch feature (not loose curves)
 
 ```python

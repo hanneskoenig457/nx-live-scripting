@@ -35,12 +35,16 @@ After a short plan, classify the required NX actions before writing code:
    and develop new narrowly scoped NXOpen code according to the source order
    below. Probe it before treating it as reusable.
 
-The high-level v1 surface creates a new part and supports an XZ sketch,
-lines/rectangles, finishing the sketch, a new-body extrusion, object lists,
-view fit and save. It intentionally does not yet edit an existing part, create
-drawings, revolve, cut, add holes/threads, export STEP, or accept arbitrary
-Python. Read [references/high-level-tools.md](references/high-level-tools.md)
-for the exact schema, invocation, atomic rollback and failure/fallback rules.
+The high-level v2 surface implements all 16 names from DreamEnding's certified
+surface as operations inside that one MCP call: status, create/open/save/close,
+STEP AP214 export, sketch/body/feature lists, XZ sketch lines/rectangles,
+finish, new-body extrude, plan-local undo and view fit. Opening never edits the
+source file directly: the host hashes and archives it into the immutable run,
+and NX opens a uniquely named copy. It intentionally does not yet create
+drawings, revolve, cut, add holes/threads or accept arbitrary Python. Read
+[references/high-level-tools.md](references/high-level-tools.md) for the exact
+schema, invocation, atomic rollback, failure/fallback rules and the
+reviewed-but-unimplemented next candidates.
 
 Do not split one dependent construction into several high-level runs: object
 references are plan-local, and one atomic plan is both faster and safely

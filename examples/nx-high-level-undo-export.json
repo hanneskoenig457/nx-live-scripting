@@ -1,0 +1,74 @@
+{
+  "operations": [
+    {
+      "tool": "nx_status"
+    },
+    {
+      "tool": "nx_create_part",
+      "id": "part",
+      "args": {
+        "path": "high-level-v2-box.prt",
+        "units": "mm"
+      }
+    },
+    {
+      "tool": "nx_create_sketch",
+      "id": "profile",
+      "args": {
+        "plane": "XZ",
+        "name": "V2_PROFILE"
+      }
+    },
+    {
+      "tool": "nx_sketch_rectangle",
+      "args": {
+        "sketch": "profile",
+        "corner1": {"x": 0, "y": 0},
+        "corner2": {"x": 10, "y": 10}
+      }
+    },
+    {
+      "tool": "nx_undo"
+    },
+    {
+      "tool": "nx_sketch_rectangle",
+      "args": {
+        "sketch": "profile",
+        "corner1": {"x": 0, "y": 0},
+        "corner2": {"x": 30, "y": 20}
+      }
+    },
+    {
+      "tool": "nx_finish_sketch",
+      "args": {"sketch": "profile"}
+    },
+    {
+      "tool": "nx_extrude",
+      "id": "solid",
+      "args": {
+        "sketch": "profile",
+        "distance": 10,
+        "reverse": false
+      }
+    },
+    {
+      "tool": "nx_list_sketches"
+    },
+    {
+      "tool": "nx_list_bodies"
+    },
+    {
+      "tool": "nx_list_features"
+    },
+    {
+      "tool": "nx_fit_view"
+    },
+    {
+      "tool": "nx_export_step",
+      "args": {"path": "exports/high-level-v2-box.stp"}
+    },
+    {
+      "tool": "nx_status"
+    }
+  ]
+}

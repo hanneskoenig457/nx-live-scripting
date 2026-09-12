@@ -143,6 +143,25 @@ Runs `20260906T152832Z-986a935f` (probe), `20260906T191220Z-e0a77a70` (member
 dump: `Display`, `SetDisplay`, `GetDisplayedParts` exist),
 `…cfa2ce58` … `…bf811165` (the three burned dispatches).
 
+Closing exactly one part is `BasePart.Close(whole_tree, close_modified,
+responses)`, not `Parts.CloseAll`. The local Python Guide confirms that exact
+four-argument shape and no license requirement. For an explicit save/discard
+choice without a modal dialog:
+
+```python
+if save:
+    part.Save(NXOpen.BasePart.SaveComponents.TrueValue,
+              NXOpen.BasePart.CloseAfterSave.FalseValue)
+part.Close(NXOpen.BasePart.CloseWholeTree.TrueValue,
+           NXOpen.BasePart.CloseModified.CloseModified,
+           None)
+```
+
+`CloseModified` means modified parts may close; it is not a save request.
+Visible run `20260912T194302Z-c723423b` opened a uniquely named, SHA-256-checked
+run copy, listed its one body, closed it with `save=False`, and then reported
+no active part. The archived source remained unchanged.
+
 ---
 
 ## 3. Sketches, datums, and why loose curves are a defect

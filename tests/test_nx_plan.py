@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import subprocess
 import sys
@@ -16,6 +17,27 @@ sys.path.insert(0, str(ROOT / "01_host"))
 
 import nx_plan  # noqa: E402
 import nx_mcp_server  # noqa: E402
+import nx_remote  # noqa: E402
+
+
+DREAMENDING_CERTIFIED_NAMES = {
+    "nx_status",
+    "nx_create_part",
+    "nx_open_part",
+    "nx_save_part",
+    "nx_close_part",
+    "nx_export_step",
+    "nx_list_sketches",
+    "nx_list_bodies",
+    "nx_list_features",
+    "nx_create_sketch",
+    "nx_sketch_line",
+    "nx_sketch_rectangle",
+    "nx_finish_sketch",
+    "nx_extrude",
+    "nx_undo",
+    "nx_fit_view",
+}
 
 
 def box_plan() -> dict:
@@ -63,7 +85,7 @@ class PlanValidationTests(unittest.TestCase):
     def test_rejects_path_escape_before_upload(self):
         plan = box_plan()
         plan["operations"][0]["args"]["path"] = "../outside.prt"
-        with self.assertRaisesRegex(nx_plan.PlanValidationError, "run directory"):
+        with self.assertRaisesRegex(nx_plan.PlanValidationError, "workspace"):
             nx_plan.validate_plan(plan)
 
     def test_rejects_unknown_tool_and_arguments(self):
@@ -94,11 +116,70 @@ class PlanValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(nx_plan.PlanValidationError, "only.*XZ"):
             nx_plan.validate_plan(plan)
 
-    def test_requires_save_to_be_last(self):
+    def test_allows_only_status_after_terminal_operation(self):
         plan = box_plan()
         plan["operations"].append({"tool": "nx_list_features"})
-        with self.assertRaisesRegex(nx_plan.PlanValidationError, "final operation"):
+        with self.assertRaisesRegex(nx_plan.PlanValidationError, "only nx_status"):
             nx_plan.validate_plan(plan)
+
+    def test_accepts_status_only_and_open_part_root(self):
+        status = nx_plan.validate_plan({"operations": [{"tool": "nx_status"}]})
+        self.assertEqual(status["operations"][0]["args"], {})
+
+        opened = nx_plan.validate_plan(
+            {
+                "operations": [
+                    {"tool": "nx_status"},
+                    {"tool": "nx_open_part", "args": {"path": "models/source.prt"}},
+                    {"tool": "nx_list_bodies"},
+                    {"tool": "nx_close_part", "args": {"save": False}},
+                    {"tool": "nx_status"},
+                ]
+            }
+        )
+        self.assertFalse(opened["operations"][3]["args"]["save"])
+
+    def test_validates_step_path_and_terminal_operations(self):
+        plan = box_plan()
+        plan["operations"][-1] = {
+            "tool": "nx_export_step",
+            "args": {"path": "exports/box.stp"},
+        }
+        normalized = nx_plan.validate_plan(plan)
+        self.assertEqual(normalized["operations"][-1]["args"]["path"], "exports/box.stp")
+
+        plan["operations"][-1]["args"]["path"] = "../box.stp"
+        with self.assertRaisesRegex(nx_plan.PlanValidationError, "workspace"):
+            nx_plan.validate_plan(plan)
+
+    def test_undo_restores_reference_validation_state(self):
+        plan = {
+            "operations": [
+                {"tool": "nx_create_part", "args": {"path": "undo.prt"}},
+                {"tool": "nx_create_sketch", "id": "profile"},
+                {"tool": "nx_undo"},
+                {
+                    "tool": "nx_sketch_line",
+                    "args": {
+                        "sketch": "profile",
+                        "start": {"x": 0, "y": 0},
+                        "end": {"x": 1, "y": 0},
+                    },
+                },
+            ]
+        }
+        with self.assertRaisesRegex(nx_plan.PlanValidationError, "unknown id"):
+            nx_plan.validate_plan(plan)
+
+        with self.assertRaisesRegex(nx_plan.PlanValidationError, "no preceding"):
+            nx_plan.validate_plan(
+                {
+                    "operations": [
+                        {"tool": "nx_create_part", "args": {"path": "undo.prt"}},
+                        {"tool": "nx_undo"},
+                    ]
+                }
+            )
 
 
 class PlanExecutionTests(unittest.TestCase):
@@ -166,6 +247,94 @@ class PlanExecutionTests(unittest.TestCase):
         self.assertEqual(result["error"]["layer"], "transport")
         runner.assert_called_once()
 
+    def test_open_part_is_hashed_and_staged_before_submit(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            source = project / "models" / "source.prt"
+            source.parent.mkdir()
+            source.write_bytes(b"NX part fixture")
+            run_id = "20260912T190000Z-open"
+            remote = project / "runs" / "nx" / run_id / "remote"
+            remote.mkdir(parents=True)
+            (remote / "result.json").write_text(json.dumps({"ok": True}))
+            (remote / "bridge-execution.json").write_text(
+                json.dumps({"execution_ok": True})
+            )
+            commands: list[list[str]] = []
+
+            def fake_run(command: list[str]) -> subprocess.CompletedProcess[str]:
+                commands.append(command)
+                if command[-1] == "status":
+                    return subprocess.CompletedProcess(
+                        command,
+                        0,
+                        json.dumps(
+                            {"state": "ready", "session_id": 1, "heartbeat": time.time()}
+                        ),
+                        "",
+                    )
+                if "nx_remote.py" in command[1]:
+                    parameters = Path(command[command.index("--parameters") + 1])
+                    payload = json.loads(parameters.read_text())
+                    self.assertEqual(
+                        payload["operations"][0]["args"]["sha256"],
+                        hashlib.sha256(source.read_bytes()).hexdigest(),
+                    )
+                    return subprocess.CompletedProcess(
+                        command, 0, f"Run: {project / 'runs' / 'nx' / run_id}\n", ""
+                    )
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            plan = {
+                "operations": [
+                    {"tool": "nx_open_part", "args": {"path": "models/source.prt"}},
+                    {"tool": "nx_list_bodies"},
+                ]
+            }
+            with patch.object(nx_plan, "ROOT", project), patch.object(
+                nx_plan, "_run", side_effect=fake_run
+            ):
+                result = nx_plan.execute_plan(plan)
+
+            self.assertTrue(result["ok"])
+            prepare = next(command for command in commands if "nx_remote.py" in command[1])
+            self.assertEqual(prepare[-2:], ["--input", "models/source.prt"])
+
+
+class RemoteInputTests(unittest.TestCase):
+    def test_archives_input_with_hash_in_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            project = Path(temporary)
+            jobs = project / "03_jobs"
+            jobs.mkdir()
+            (jobs / "job.py").write_text(
+                "def main(job_dir):\n    return None\n", encoding="utf-8"
+            )
+            source = project / "models" / "input.prt"
+            source.parent.mkdir()
+            source.write_bytes(b"fixture part")
+            argv = [
+                "nx_remote.py",
+                "job.py",
+                "--input",
+                "models/input.prt",
+                "--prepare-only",
+                "--no-lint",
+            ]
+            with patch.object(nx_remote, "ROOT", project), patch.object(
+                nx_remote, "powershell"
+            ), patch.object(nx_remote, "scp"), patch.object(sys, "argv", argv):
+                self.assertEqual(nx_remote.main(), 0)
+
+            run = next((project / "runs" / "nx").iterdir())
+            archived = run / "inputs" / "models" / "input.prt"
+            manifest = json.loads((run / "request.json").read_text())
+            self.assertEqual(archived.read_bytes(), b"fixture part")
+            self.assertEqual(
+                manifest["inputs"][0]["sha256"],
+                hashlib.sha256(b"fixture part").hexdigest(),
+            )
+
 
 class MCPServerTests(unittest.TestCase):
     def test_exposes_one_high_level_tool(self):
@@ -181,6 +350,8 @@ class MCPServerTests(unittest.TestCase):
             ),
             set(nx_plan.TOOL_ARGUMENTS),
         )
+        self.assertEqual(set(nx_plan.TOOL_ARGUMENTS), DREAMENDING_CERTIFIED_NAMES)
+        self.assertEqual(len(nx_plan.TOOL_ARGUMENTS), 16)
         self.assertEqual(
             operation_schema["properties"]["tool"]["$ref"],
             "#/$defs/CertifiedToolName",

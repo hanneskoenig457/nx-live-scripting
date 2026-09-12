@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import time
 import uuid
@@ -60,6 +61,13 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('job')
     parser.add_argument('--parameters', type=Path)
+    parser.add_argument(
+        '--input',
+        action='append',
+        type=Path,
+        default=[],
+        help='Archive and upload a file below NX_PROJECT_ROOT into inputs/ (repeatable)',
+    )
     parser.add_argument('--prepare-only', action='store_true', help='Upload only; play the printed journal path in visible NX')
     parser.add_argument(
         '--toolkit-job',
@@ -68,10 +76,24 @@ def main():
     )
     parser.add_argument('--no-lint', action='store_true', help='Skip nx_lint.py static checks (escape hatch for a false positive)')
     args=parser.parse_args()
-    job_root = CODE / '03_jobs' if args.toolkit_job else ROOT / '03_jobs'
+    job_root = (CODE / '03_jobs' if args.toolkit_job else ROOT / '03_jobs').resolve()
     job=(job_root/args.job).resolve()
     if not job.is_relative_to(job_root) or not job.is_file():
         parser.error(f'Job must exist inside {job_root}')
+    inputs = []
+    seen_inputs = set()
+    resolved_root = ROOT.resolve()
+    for value in args.input:
+        source = (
+            (resolved_root / value).resolve() if not value.is_absolute() else value.resolve()
+        )
+        if not source.is_relative_to(resolved_root) or not source.is_file():
+            parser.error(f'Input must be a file below NX_PROJECT_ROOT: {value}')
+        relative = source.relative_to(resolved_root)
+        if relative in seen_inputs:
+            parser.error(f'Duplicate input: {relative}')
+        seen_inputs.add(relative)
+        inputs.append((source, relative))
     source=job.read_bytes()
     if job.suffix == '.py':
         compile(source,str(job),'exec')
@@ -93,11 +115,24 @@ def main():
     remote=REMOTE+'/'+key
     (local/archived_name).write_bytes(source)
     (local/'parameters.json').write_text(json.dumps(params,indent=2))
-    job_label = str(job.relative_to(CODE if args.toolkit_job else ROOT))
-    (local/'request.json').write_text(json.dumps({'host':HOST,'remote':remote,'job':job_label,'job_source':'toolkit' if args.toolkit_job else 'project','sha256':hashlib.sha256(source).hexdigest(),'parameters':params},indent=2))
+    input_manifest = []
+    for input_source, relative in inputs:
+        archived_input = local / 'inputs' / relative
+        archived_input.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(input_source, archived_input)
+        input_manifest.append({
+            'path': str(relative),
+            'sha256': hashlib.sha256(archived_input.read_bytes()).hexdigest(),
+            'size_bytes': archived_input.stat().st_size,
+        })
+    job_label_root = CODE.resolve() if args.toolkit_job else resolved_root
+    job_label = str(job.relative_to(job_label_root))
+    (local/'request.json').write_text(json.dumps({'host':HOST,'remote':remote,'job':job_label,'job_source':'toolkit' if args.toolkit_job else 'project','sha256':hashlib.sha256(source).hexdigest(),'parameters':params,'inputs':input_manifest},indent=2))
     print('Run:',local,flush=True)
     powershell(f"New-Item -ItemType Directory -Force -Path '{remote}' | Out-Null",check=True)
     scp([str(local/archived_name),str(local/'parameters.json'),HOST+':'+remote+'/'],check=True)
+    if inputs:
+        scp(['-r', str(local/'inputs'), HOST+':'+remote+'/'], check=True)
     if args.prepare_only:
         (local/'outcome.json').write_text(json.dumps({'status':'prepared','execution':'interactive journal pending'},indent=2))
         print('Play this journal in visible NX:', remote+'/'+archived_name,flush=True)

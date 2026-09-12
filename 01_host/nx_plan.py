@@ -9,6 +9,7 @@ dispatcher, and the NX-side implementation uses locally verified recipes.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -26,11 +27,19 @@ from nx_remote import CODE, ROOT
 MAX_OPERATIONS = 100
 MAX_ABS_COORDINATE = 1_000_000.0
 MAX_WAIT_SECONDS = 600
-PLAN_CONTRACT_VERSION = 1
+PLAN_CONTRACT_VERSION = 2
 REFERENCE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{0,63}$")
 
 TOOL_ARGUMENTS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
+    "nx_status": (frozenset(), frozenset()),
     "nx_create_part": (frozenset({"path"}), frozenset({"units"})),
+    "nx_open_part": (frozenset({"path"}), frozenset()),
+    "nx_save_part": (frozenset(), frozenset()),
+    "nx_close_part": (frozenset(), frozenset({"save"})),
+    "nx_export_step": (frozenset({"path"}), frozenset()),
+    "nx_list_sketches": (frozenset(), frozenset()),
+    "nx_list_bodies": (frozenset(), frozenset()),
+    "nx_list_features": (frozenset(), frozenset()),
     "nx_create_sketch": (frozenset(), frozenset({"plane", "name"})),
     "nx_sketch_line": (frozenset({"sketch", "start", "end"}), frozenset()),
     "nx_sketch_rectangle": (
@@ -39,11 +48,8 @@ TOOL_ARGUMENTS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     ),
     "nx_finish_sketch": (frozenset({"sketch"}), frozenset()),
     "nx_extrude": (frozenset({"sketch", "distance"}), frozenset({"reverse"})),
-    "nx_list_sketches": (frozenset(), frozenset()),
-    "nx_list_bodies": (frozenset(), frozenset()),
-    "nx_list_features": (frozenset(), frozenset()),
+    "nx_undo": (frozenset(), frozenset()),
     "nx_fit_view": (frozenset(), frozenset()),
-    "nx_save_part": (frozenset(), frozenset()),
 }
 
 # One runtime enum feeds the MCP JSON schema from the same registry that the
@@ -55,6 +61,18 @@ CertifiedToolName = StrEnum(
 
 TOOLS_REQUIRING_ID = frozenset({"nx_create_sketch"})
 TOOLS_ALLOWING_ID = frozenset({"nx_create_part", "nx_create_sketch", "nx_extrude"})
+MODEL_MUTATIONS = frozenset(
+    {
+        "nx_create_sketch",
+        "nx_sketch_line",
+        "nx_sketch_rectangle",
+        "nx_finish_sketch",
+        "nx_extrude",
+    }
+)
+TERMINAL_OPERATIONS = frozenset(
+    {"nx_save_part", "nx_close_part", "nx_export_step"}
+)
 
 
 class PlanValidationError(ValueError):
@@ -95,7 +113,9 @@ def _reference(value: Any, index: int, field: str, known: set[str]) -> str:
     return value
 
 
-def _safe_part_path(value: Any, index: int) -> str:
+def _safe_relative_path(
+    value: Any, index: int, *, suffixes: frozenset[str], purpose: str
+) -> str:
     if (
         not isinstance(value, str)
         or not value
@@ -103,13 +123,26 @@ def _safe_part_path(value: Any, index: int) -> str:
         or "\\" in value
         or ":" in value
     ):
-        _fail(index, "path must be a non-empty relative POSIX path")
+        _fail(index, f"{purpose} path must be a non-empty relative POSIX path")
     path = PurePosixPath(value)
-    if path.is_absolute() or ".." in path.parts or path.suffix.lower() != ".prt":
-        _fail(index, "path must stay below the run directory and end in .prt")
+    if path.is_absolute() or ".." in path.parts or path.suffix.lower() not in suffixes:
+        endings = "/".join(sorted(suffixes))
+        _fail(index, f"{purpose} path must stay inside its workspace and end in {endings}")
     if any(part in {"", "."} for part in path.parts):
-        _fail(index, "path contains an empty or dot component")
+        _fail(index, f"{purpose} path contains an empty or dot component")
     return str(path)
+
+
+def _safe_part_path(value: Any, index: int, *, purpose: str) -> str:
+    return _safe_relative_path(
+        value, index, suffixes=frozenset({".prt"}), purpose=purpose
+    )
+
+
+def _safe_step_path(value: Any, index: int) -> str:
+    return _safe_relative_path(
+        value, index, suffixes=frozenset({".step", ".stp"}), purpose="STEP output"
+    )
 
 
 def validate_plan(plan: Any) -> dict[str, Any]:
@@ -124,7 +157,9 @@ def validate_plan(plan: Any) -> dict[str, Any]:
     known_ids: set[str] = set()
     sketch_ids: set[str] = set()
     finished_sketches: set[str] = set()
-    created_part = False
+    part_root: str | None = None
+    terminal_operation: str | None = None
+    mutation_history: list[tuple[set[str], set[str], set[str]]] = []
 
     for index, operation in enumerate(operations):
         if not isinstance(operation, dict):
@@ -135,6 +170,11 @@ def validate_plan(plan: Any) -> dict[str, Any]:
         tool = operation.get("tool")
         if tool not in TOOL_ARGUMENTS:
             _fail(index, f"unsupported tool {tool!r}")
+        if terminal_operation is not None and tool != "nx_status":
+            _fail(
+                index,
+                f"only nx_status may follow terminal operation {terminal_operation}",
+            )
         args = operation.get("args", {})
         if not isinstance(args, dict):
             _fail(index, "args must be an object")
@@ -157,21 +197,28 @@ def validate_plan(plan: Any) -> dict[str, Any]:
             if operation_id in known_ids:
                 _fail(index, f"duplicate id {operation_id!r}")
 
-        values: dict[str, Any]
-        if tool == "nx_create_part":
-            if created_part:
-                _fail(index, "only one nx_create_part is allowed per atomic plan")
-            if index != 0:
-                _fail(index, "nx_create_part must be the first operation")
+        values: dict[str, Any] = dict(args)
+        if tool in {"nx_create_part", "nx_open_part"}:
+            if part_root is not None:
+                _fail(index, "only one nx_create_part or nx_open_part is allowed per plan")
+            if any(item["tool"] != "nx_status" for item in normalized):
+                _fail(index, f"{tool} must be the first non-status operation")
+            purpose = "new part" if tool == "nx_create_part" else "input part"
+            path = _safe_part_path(args["path"], index, purpose=purpose)
+            values = {"path": path}
             units = args.get("units", "mm")
-            if units not in {"mm", "inch"}:
-                _fail(index, "units must be 'mm' or 'inch'")
-            values = {"path": _safe_part_path(args["path"], index), "units": units}
-            created_part = True
-        else:
-            if not created_part:
-                _fail(index, "the certified surface requires nx_create_part first")
-            values = dict(args)
+            if tool == "nx_create_part":
+                if units not in {"mm", "inch"}:
+                    _fail(index, "units must be 'mm' or 'inch'")
+                values["units"] = units
+            part_root = tool
+        elif tool != "nx_status" and part_root is None:
+            _fail(index, "operation requires nx_create_part or nx_open_part first")
+
+        if tool in MODEL_MUTATIONS:
+            mutation_history.append(
+                (known_ids.copy(), sketch_ids.copy(), finished_sketches.copy())
+            )
 
         if tool == "nx_create_sketch":
             plane = args.get("plane", "XZ")
@@ -222,8 +269,21 @@ def validate_plan(plan: Any) -> dict[str, Any]:
                 "distance": _number(args["distance"], index, "distance", positive=True),
                 "reverse": reverse,
             }
-        elif tool == "nx_save_part" and index != len(operations) - 1:
-            _fail(index, "nx_save_part must be the final operation in an atomic plan")
+        elif tool == "nx_close_part":
+            save = args.get("save", True)
+            if not isinstance(save, bool):
+                _fail(index, "save must be a boolean")
+            values = {"save": save}
+        elif tool == "nx_export_step":
+            values = {"path": _safe_step_path(args["path"], index)}
+        elif tool == "nx_undo":
+            if not mutation_history:
+                _fail(index, "no preceding model mutation is available to undo")
+            known_ids, sketch_ids, finished_sketches = mutation_history.pop()
+            values = {}
+
+        if tool in TERMINAL_OPERATIONS:
+            terminal_operation = tool
 
         item: dict[str, Any] = {"tool": tool, "args": values}
         if operation_id is not None:
@@ -279,6 +339,22 @@ def execute_plan(plan: Any, wait_seconds: int = 90) -> dict[str, Any]:
             f"wait_seconds must be an integer from 1 through {MAX_WAIT_SECONDS}"
         )
 
+    input_paths: list[Path] = []
+    root = ROOT.resolve()
+    for operation in normalized["operations"]:
+        if operation["tool"] != "nx_open_part":
+            continue
+        relative = PurePosixPath(operation["args"]["path"])
+        source = root.joinpath(*relative.parts).resolve()
+        if not source.is_relative_to(root) or not source.is_file():
+            raise PlanValidationError(
+                f"input part does not exist below NX_PROJECT_ROOT: {relative}"
+            )
+        operation["args"]["requested_path"] = operation["args"]["path"]
+        operation["args"]["path"] = source.relative_to(root).as_posix()
+        operation["args"]["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest()
+        input_paths.append(source)
+
     status_process = _run([sys.executable, str(CODE / "01_host" / "nx_dispatch.py"), "status"])
     if status_process.returncode != 0:
         return _transport_failure(status_process.stderr.strip() or "Bridge status failed")
@@ -300,17 +376,18 @@ def execute_plan(plan: Any, wait_seconds: int = 90) -> dict[str, Any]:
         ) as parameters:
             json.dump(normalized, parameters, ensure_ascii=False, indent=2)
             parameters_path = Path(parameters.name)
-        prepare = _run(
-            [
-                sys.executable,
-                str(CODE / "01_host" / "nx_remote.py"),
-                "nx_high_level_plan.py",
-                "--toolkit-job",
-                "--parameters",
-                str(parameters_path),
-                "--prepare-only",
-            ]
-        )
+        prepare_command = [
+            sys.executable,
+            str(CODE / "01_host" / "nx_remote.py"),
+            "nx_high_level_plan.py",
+            "--toolkit-job",
+            "--parameters",
+            str(parameters_path),
+            "--prepare-only",
+        ]
+        for source in input_paths:
+            prepare_command.extend(["--input", str(source.relative_to(root))])
+        prepare = _run(prepare_command)
     finally:
         if parameters_path is not None:
             parameters_path.unlink(missing_ok=True)
