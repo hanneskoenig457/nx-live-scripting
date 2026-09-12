@@ -20,6 +20,33 @@ a project no longer holds a copy of that layout — it keeps only `03_jobs/`
 itself via `NX_PROJECT_ROOT` (unset = work directly in the toolkit). Verified
 with `20260909T061426Z-913deadf`, dispatched end to end from a thin project.
 
+## Decision ladder: high level first
+
+After a short plan, classify the required NX actions before writing code:
+
+1. If the task fits the certified declarative surface, call the single
+   `nx_run_plan` MCP tool. If that MCP server is not registered in the current
+   host, use its equivalent CLI, `01_host/nx_plan.py`; missing MCP registration
+   is not a reason to skip the high-level layer.
+2. If the high-level surface cannot express the task or its result is
+   insufficient, compose a normal job from the **verified**
+   `SNIPPETS-modelling.md` / `SNIPPETS-drafting.md` examples.
+3. Only when those verified low-level examples are also insufficient, look up
+   and develop new narrowly scoped NXOpen code according to the source order
+   below. Probe it before treating it as reusable.
+
+The high-level v1 surface creates a new part and supports an XZ sketch,
+lines/rectangles, finishing the sketch, a new-body extrusion, object lists,
+view fit and save. It intentionally does not yet edit an existing part, create
+drawings, revolve, cut, add holes/threads, export STEP, or accept arbitrary
+Python. Read [references/high-level-tools.md](references/high-level-tools.md)
+for the exact schema, invocation, atomic rollback and failure/fallback rules.
+
+Do not split one dependent construction into several high-level runs: object
+references are plan-local, and one atomic plan is both faster and safely
+rollbackable. A transport failure is not a reason to switch to low-level code,
+because both layers use the same visible dispatcher.
+
 ## Prefer the visible session; batch is the fallback
 
 The point of this setup is that the user can **watch** construction and drawing
@@ -168,7 +195,7 @@ Read top-down, extend bottom-up.
 
 | Layer | Files | Holds |
 | --- | --- | --- |
-| **1 Transport** | this file, [operations.md](references/operations.md), [job-contract.md](references/job-contract.md), [bridge-architecture.md](references/bridge-architecture.md) | How a job reaches NX, what it must satisfy, how to diagnose the bridge |
+| **1 Transport** | this file, [high-level-tools.md](references/high-level-tools.md), [operations.md](references/operations.md), [job-contract.md](references/job-contract.md), [bridge-architecture.md](references/bridge-architecture.md) | How high-level plans and low-level jobs reach NX, what they must satisfy, how to diagnose the bridge |
 | **2 Norm knowledge** | [norm-knowledge.md](references/norm-knowledge.md) | What a standard element *is* and which numbers its norm fixes. Placeholder + entry schema; fill one element per session from the norm original |
 | **3 Rules** | [dimensioning-rules.md](references/dimensioning-rules.md) | How to dimension norm-correctly, independent of NX: placement, order, symbols, fits, surface, edges, checklists. Part-specific values stay with the project |
 | **4 API** | [api-modelling.md](references/api-modelling.md) (geometry), [api-drafting.md](references/api-drafting.md) (drawing), [nxopen-python-notes.md](references/nxopen-python-notes.md) (the .NET↔Python gap), [SNIPPETS-modelling.md](references/SNIPPETS-modelling.md) / [SNIPPETS-drafting.md](references/SNIPPETS-drafting.md) (same calls, code-only) | Calls that have **actually run**, each with its run id or probe, plus the dead ends. Unlisted paths are unverified, not impossible |

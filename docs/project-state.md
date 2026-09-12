@@ -11,7 +11,37 @@ NX-Sitzung per Dispatcher steuern, Jobs als Python-Files shippable, Results
 einsammelbar. Ordner nach Datenfluss: `01_host/` → `02_bridge/` → `03_jobs/`,
 `04_reference/` zum Nachschlagen.
 
-## Beobachtet / validiert (Stand 2026-09-06)
+## Beobachtet / validiert (Stand 2026-09-12)
+
+- Deklarative High-Level-Schicht für neue einfache Extrusionsmodelle:
+  `01_host/nx_plan.py` (Schema, Sicherheit, Orchestrierung), ein MCP-Tool
+  `nx_run_plan` und `03_jobs/nx_high_level_plan.py` auf lokal verifizierten
+  NXOpen-Rezepten. Entscheidung und Fallback stehen in
+  [`high-level-tools.md`](../skills/nx-live-scripting/references/high-level-tools.md).
+- Vollständige sichtbare MCP-stdio-Abnahme: Run
+  `20260912T113647Z-60d37433`, `nx_run_plan` → MCP-Server → Host-Executor →
+  Queue → sichtbares NX. `bridge-execution.json`: `execution_ok: true`, PID
+  10924, Desktop-Session 1, Main-Thread 1, passender Source-SHA-256;
+  `result.json`: neun erfolgreiche Schritte, XZ-Skizze mit vier Linien,
+  Extrude mit einem Körper, vier Features, Fit und Save.
+- Produktionsvertrag erneut im echten sichtbaren NX verifiziert: Run
+  `20260912T185302Z-9cb4c6ea`; Host und statischer NX-Runner melden beide
+  `contract_version: 1`, alle neun Planoperationen sowie Bridge-Hashprüfung
+  erfolgreich. Das MCP-Schema bezieht seine elf Operationsnamen jetzt aus
+  derselben Registry wie der Host-Validator und markiert den Aufruf als
+  verändernd und nicht idempotent.
+- Der vorherige sichtbare MCP-Run `20260912T113535Z-db64f032` fand die
+  Live-Session-Kollision gleicher Part-Blattnamen trotz verschiedener
+  Run-Verzeichnisse (`NXException 1020004`). Der Runner versieht den echten
+  Dateinamen deshalb zwingend mit der Run-ID; der fehlgeschlagene Run wurde
+  nicht resubmitted.
+- Ergänzende reale NX-API-Abnahme im Batch-Fallback: Run
+  `20260912T104646Z-82000717`, `ok: true`, eingesammeltes `.prt` 71.682 Byte.
+  Diagnose-Run `20260912T104553Z-5eeb703b` belegte den Modell-Rollback nach
+  Teileerzeugung (`rollback.ok: true`).
+- Neun lokale Tests prüfen Schema/Defaults, Pfad-Confinement, Tool-Allowlist,
+  Referenzreihenfolge, Save-Position, Bridge-Gate, Exactly-once-Submit und die
+  Ein-Tool-MCP-Oberfläche. Der NXOpen-Linter meldet 0 Fehler/0 Warnungen.
 
 - Sichtbarer Pfad Ende-zu-Ende lauffähig (Details: [nx-setup-verified.md](nx-setup-verified.md)):
   Run `20260905T211411Z-4db4f56d`, drei Features mit Undo-Marks, NX-PID 13032, Desktop-Session 1.
@@ -71,6 +101,13 @@ jede Aussage dort nennt den Probe-Job, der sie stützt.
 - Kein visueller Rückkanal: Job liefert nur `result.json`; Viewport-Bild/PDF wird nicht mit eingesammelt (Handoff-Punkt 9.2).
 - API-Suche nur Substring auf Member-Namen; .NET-Signaturen ≠ Python. Lizenz-/Deprecation-Treffer müssen manuell geprüft werden (Handoff-Punkt 9.3).
 - Timer 1000 ms + mehrere SSH-Runden ≈ 4 s Poll-Anteil an ~7 s pro Auftrag (Handoff-Punkt 9.5).
+- High-Level-v1 ist absichtlich schmal: nur neues run-lokales Teil, XZ-Skizze,
+  Linien/Rechteck, neue Extrusion, Listen, Fit und Save. `NewDisplay` verwirft
+  eine vorherige Undo-Marke; atomar zurückgerollt werden daher alle
+  Modellschritte **nach** Erzeugung des neuen, ungespeicherten Container-Teils.
+  Die vom Aufrufer gewünschte `.prt`-Benennung wird für die langlebige sichtbare
+  Sitzung automatisch um die Run-ID ergänzt und als tatsächlicher Pfad
+  zurückgegeben.
 
 ## Geplant (nicht begonnen)
 
@@ -78,6 +115,9 @@ jede Aussage dort nennt den Probe-Job, der sie stützt.
 2. Rückkanal fürs Auge (Handoff 9.2) — größter Hebel.
 3. .NET→Python-Mapping-Regeln + verifizierte Beispiele indexieren, erst dann Embedding-Index (Handoff 9.3).
 4. Dispatcher auf `managed_core`/net8 nur bei NX-Upgrade oder wenn ohnehin angefasst (Handoff 9.4, heute nicht anfassen).
+5. High-Level-Oberfläche erst nach weiteren realen Probe-Runs um zusätzliche
+   Ebenen/Features erweitern; keine experimentellen DreamEnding-Aufrufe
+   ungeprüft übernehmen (Issue #6).
 
 ## Geschlossen
 
@@ -97,6 +137,8 @@ jede Aussage dort nennt den Probe-Job, der sie stützt.
 - Issue #3: API-Retrieval + .NET→Python-Mapping (Handoff 9.3) — erste Hälfte
   geliefert, Index offen.
 - Issue #4: Zeichnungsableitung, die beiden belegten Lücken oben.
+- Issue #6: High-Level-NX-Toolplan vor Low-Level-Jobs — vollständig sichtbar
+  über MCP stdio validiert; bereit zum Schließen.
 - Kein Project-Board (erst bei mehreren aktiven/blockierten/übergebenen Issues).
 
 Herleitung und Alternativenbewertung: [nx-live-scripting-handoff.md](nx-live-scripting-handoff.md).

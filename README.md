@@ -24,6 +24,8 @@ Die Sequenzen, die tatsächlich gelaufen sind — und die Wege, die belegt nicht
 funktionieren:
 [`skills/…/references/api-modelling.md`](skills/nx-live-scripting/references/api-modelling.md)
 und [`api-drafting.md`](skills/nx-live-scripting/references/api-drafting.md).
+Die deklarative High-Level-Oberfläche vor dem eigenen Job-Code:
+[`high-level-tools.md`](skills/nx-live-scripting/references/high-level-tools.md).
 
 ## Was hier liegt
 
@@ -35,9 +37,12 @@ Nachschlagewerk beim Schreiben von Jobs.
 01_host/                      Mac-Seite: alles wird von hier aus angestoßen
   nx_bridge_install.py        Dispatcher bauen, sichtbares NX starten
   nx_remote.py                Job archivieren und hochladen (+ Batch-Pfad), lintet vorher
+                              (`--toolkit-job` für feste Runner aus diesem Toolkit)
   nx_lint.py                  Statische Vorab-Pruefung eines job.py (Imports, Tolerance, main-Signatur)
   nx_dispatch.py              Jobs einreihen, Status, Stop
   nx_visible.py               NX starten, Ergebnisse einsammeln
+  nx_plan.py                  deklarativen High-Level-Plan validieren + einmal ausführen
+  nx_mcp_server.py            ein MCP-Tool `nx_run_plan` über denselben Plan-Executor
 02_bridge/                    NX-Seite: der Dispatcher, den NX beim Start lädt
   VisibleBridge.cs            Queue-Polling auf dem NX-Main-Thread, über ufsta
   start-visible.cmd           Launcher, setzt DOTNET_ROOT für x64-NX auf ARM64-VM
@@ -51,6 +56,7 @@ Nachschlagewerk beim Schreiben von Jobs.
   part_open_probe.py          Liest NX' Ladestatus im Klartext, wenn ein Teil
                               nicht mehr öffnet
   probes/                     Archivierte Belege hinter den Layer-4-Dateien
+  nx_high_level_plan.py       zertifizierte High-Level-Operationen in einem atomaren Job
 04_reference/                 Nachschlagen beim Schreiben von Jobs
   nx_api_lookup.py            Substring-Suche in NXOpen.xml
   NXOpen.xml                  API-Doku aus der eigenen Installation (gitignored)
@@ -59,6 +65,7 @@ Nachschlagewerk beim Schreiben von Jobs.
 docs/                         Aufbau, Belege, Recherchestand
 skills/nx-live-scripting/     Der Skill für Claude Code und Codex/GPT
 runs/nx/<run-id>/             Erzeugt: archivierte Source, Manifest, Ergebnisse
+examples/                     sichere, validierbare High-Level-Beispielpläne
 ```
 
 ## Der Kern in drei Sätzen
@@ -76,13 +83,17 @@ Warum nicht `USER_STARTUP`, nicht `run_journal.exe`, nicht
 `JournalManager.PlayDotNetJournal` und nicht NX Remoting: siehe die beiden
 Dokumente unter `docs/`.
 
-## Status: inhaltlich Kopie, Struktur neu
+## Status: verifizierte Bridge plus deklarative High-Level-Schicht
 
-Der **Code** ist unverändert aus `10_Online_Machining` übernommen, weil er dort
-verifiziert läuft (Run `20260905T211411Z-4db4f56d`, sichtbare Desktop-Session 1).
-Umbenennen beim Kopieren hätte ein funktionierendes System auf Verdacht
-angefasst. Verändert wurden bisher nur die **Ordnernamen** hier und die
-Pfadangaben, die auf sie zeigen — die VM-Seite ist davon nicht berührt.
+Die Bridge stammt unverändert aus `10_Online_Machining` und läuft dort
+verifiziert (Run `20260905T211411Z-4db4f56d`, sichtbare Desktop-Session 1).
+Darüber liegt inzwischen eine eigene deklarative High-Level-Schicht:
+`nx_run_plan` bündelt eine kleine zertifizierte Operationsmenge in einem
+validierten, einmal eingereihten NX-Job. Eigenen NXOpen-Code schreibt der Skill
+erst, wenn diese Schicht und die verifizierten Low-Level-Snippets nicht reichen.
+Die VM-seitige Dispatcher-Assembly wurde dafür nicht verändert.
+Konkret sind das ein registriertes MCP-Tool und derzeit elf interne
+Planoperationen; der verifizierte Box-Akzeptanzplan verwendet neun davon.
 
 Die projektgebundenen Namen stecken deshalb noch im Code und sind Aufgabe 1:
 
